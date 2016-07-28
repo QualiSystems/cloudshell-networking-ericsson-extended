@@ -16,7 +16,7 @@ def _get_time_stamp():
     return time.strftime("%d%m%y-%H%M%S", time.localtime())
 
 
-class EricssonConfigurationOperations(ConfigurationOperationsInterface, FirmwareOperationsInterface):
+class EricssonConfigurationOperations(ConfigurationOperationsInterface):
     def __init__(self, cli=None, logger=None, api=None, resource_name=None):
         self._logger = logger
         self._api = api
@@ -48,50 +48,6 @@ class EricssonConfigurationOperations(ConfigurationOperationsInterface, Firmware
             self._cli = inject.instance(CLI_SERVICE)
         return self._cli
 
-    def update_firmware(self, remote_host, file_path, size_of_firmware):
-        pass
-
-    def copy(self, source_file='', destination_file='', vrf=None, timeout=600, retries=5):
-        """Copy file from device to tftp or vice versa, as well as copying inside devices filesystem
-
-        :param source_file: source file.
-        :param destination_file: destination file.
-        :return tuple(True or False, 'Success or Error message')
-        """
-
-        host = None
-
-        if '://' in source_file:
-            source_file_data_list = re.sub('/+', '/', source_file).split('/')
-            host = source_file_data_list[1]
-            filename = source_file_data_list[-1]
-        elif '://' in destination_file:
-            destination_file_data_list = re.sub('/+', '/', destination_file).split('/')
-            host = destination_file_data_list[1]
-            filename = destination_file_data_list[-1]
-        else:
-            filename = destination_file
-
-        if host and not validateIP(host):
-            raise Exception('EricssonConfigurationOperations', 'Copy method: \'{}\' is not valid remote ip.'.format(host))
-
-        copy_command_str = 'copy {0} {1}'.format(source_file, destination_file)
-        if vrf:
-            copy_command_str += ' vrf {0}'.format(vrf)
-
-        expected_map = OrderedDict()
-        if host:
-            expected_map[host] = lambda session: session.send_line('')
-        expected_map[r'{0}|\s+[Vv][Rr][Ff]\s+|\[confirm\]|\?'.format(filename)] = lambda session: session.send_line('')
-        expected_map['\(y/n\)'] = lambda session: session.send_line('y')
-        expected_map['\([Yy]es/[Nn]o\)'] = lambda session: session.send_line('yes')
-        expected_map['bytes'] = lambda session: session.send_line('')
-
-        output = self.cli.send_command(command=copy_command_str, expected_map=expected_map, timeout=60)
-        output += self.cli.send_command('')
-
-        return self._check_download_from_tftp(output)
-
     def _check_download_from_tftp(self, output):
         """Verify if file was successfully uploaded
         :param output: output from cli
@@ -104,39 +60,11 @@ class EricssonConfigurationOperations(ConfigurationOperationsInterface, Firmware
         if not status_match:
             is_success = False
             match_error = re.search(r"can't connect.*connection timed out|Error.*\n|[Ll]ogin [Ff]ailed", output, re.IGNORECASE)
-            message = 'Copy Command failed. '
             if match_error:
                 self.logger.error(message)
                 message += match_error.group().replace('%', '')
 
         return is_success, message
-
-    # def save_configuration(self, source_filename, timeout=30, vrf=None):
-    #     """Replace config on target device with specified one
-    #
-    #     :param source_filename: full path to the file which will replace current running-config
-    #     :param timeout: period of time code will wait for replace to finish
-    #     """
-    #
-    #     if not source_filename:
-    #         raise Exception('EricssonConfigurationOperations', "No source filename provided for config replace method!")
-    #     command = 'configure replace ' + source_filename
-    #     expected_map = {
-    #         '[\[\(][Yy]es/[Nn]o[\)\]]|\[confirm\]': lambda session: session.send_line('yes'),
-    #         '\(y\/n\)': lambda session: session.send_line('y'),
-    #         '[\[\(][Nn]o[\)\]]': lambda session: session.send_line('y'),
-    #         '[\[\(][Yy]es[\)\]]': lambda session: session.send_line('y'),
-    #         '[\[\(][Yy]/[Nn][\)\]]': lambda session: session.send_line('y'),
-    #         'overwritte': lambda session: session.send_line('yes')
-    #     }
-    #     output = self.cli.send_command(command=command, expected_map=expected_map, timeout=timeout)
-    #     match_error = re.search(r'[Ee]rror:', output)
-    #
-    #     if match_error is not None:
-    #         error_str = output[match_error.end() + 1:] + '\n'
-    #         error_str += error_str[:error_str.find('\n')]
-    #
-    #         raise Exception('EricssonConfigurationOperations', 'Configure replace completed with error: ' + error_str)
 
     def _get_resource_attribute(self, resource_full_path, attribute_name):
         """Get resource attribute by provided attribute_name
@@ -244,13 +172,4 @@ class EricssonConfigurationOperations(ConfigurationOperationsInterface, Firmware
             self.cli.commit()
             return 'Restore configuration completed.'
         else:
-            raise Exception('EricssonConfigurationOperations', is_downloaded[1])
-
-    def _check_replace_command(self):
-        """Checks whether replace command exist on device or not
-        """
-
-        output = self.cli.send_command('configure replace')
-        if re.search(r'invalid (input|command)', output.lower()):
-            return False
-        return True
+            raise Exception('EricssonConfigurationOperations', 'Restore Command failed: {0}'.format(is_downloaded[1]))
