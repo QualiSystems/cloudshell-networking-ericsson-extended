@@ -61,3 +61,5 @@ target/
 #Ipython Notebook
 .ipynb_checkpoints
 .pypirc
+cloudshell/networking/ericsson/autoload/test.py
+cloudshell/tests/networking/ericsson/autoload/test_ericsson_autoload.py

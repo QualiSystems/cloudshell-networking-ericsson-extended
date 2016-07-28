@@ -20,7 +20,6 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
     IF_ENTITY = "ifDescr"
     ENTITY_PHYSICAL = "entPhysicalDescr"
 
-
     def __init__(self, snmp_handler=None, logger=None, supported_os=None):
         """Basic init with injected snmp handler and logger
 
@@ -43,6 +42,7 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
         self.port_exclude_pattern = r'serial|stack|engine|management|mgmt|voice|foreign'
         self.port_ethernet_vendor_type_pattern = ''
         self.vendor_type_exclusion_pattern = ''
+        self.module_details_regexp = r'^(?P<module_model>.*)\s+sn:(?P<serial_number>.*)\s+rev:(?P<version>.*) mfg'
         self.load_mib_list = []
         self.resources = list()
         self.attributes = list()
@@ -89,7 +89,7 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
                 if chassis_id == '-1':
                     chassis_id = '0'
                 self.relative_path[chassis] = chassis_id
-        self._filter_lower_bay_containers()
+        # self._filter_lower_bay_containers()
         self.get_module_list()
         self.add_relative_paths()
         self._get_chassis_attributes(self.chassis_list)
@@ -235,7 +235,7 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
                     if port_id and port_id in self.if_table and port_id not in self.port_mapping.values() \
                             and not re.search(self.port_exclude_pattern,
                                               self.if_table[port_id][self.IF_ENTITY], re.IGNORECASE):
-                            self.port_mapping[index] = port_id
+                        self.port_mapping[index] = port_id
                     self.port_list.append(index)
             elif temp_entity_table['entPhysicalClass'] == 'powerSupply':
                 self.power_supply_list.append(index)
@@ -243,25 +243,25 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
         self._filter_entity_table(result_dict)
         return result_dict
 
-    def _filter_lower_bay_containers(self):
-        upper_container = None
-        lower_container = None
-        containers = self.entity_table.filter_by_column('Class', "container").sort_by_column('ParentRelPos').keys()
-        # for container in containers:
-        #     vendor_type = self.snmp.get_property('ENTITY-MIB', 'entPhysicalVendorType', container)
-        #     if 'uppermodulebay' in vendor_type.lower():
-        #         upper_container = container
-        #     if 'lowermodulebay' in vendor_type.lower():
-        #         lower_container = container
-        if lower_container and upper_container:
-            child_upper_items_len = len(self.entity_table.filter_by_column('ContainedIn', str(upper_container)
-                                                                           ).sort_by_column('ParentRelPos').keys())
-            child_lower_items = self.entity_table.filter_by_column('ContainedIn', str(lower_container)
-                                                                   ).sort_by_column('ParentRelPos').keys()
-            for child in child_lower_items:
-                self.entity_table[child]['entPhysicalContainedIn'] = upper_container
-                self.entity_table[child]['entPhysicalParentRelPos'] = str(child_upper_items_len + int(
-                    self.entity_table[child]['entPhysicalParentRelPos']))
+    # def _filter_lower_bay_containers(self):
+    #     upper_container = None
+    #     lower_container = None
+    #     containers = self.entity_table.filter_by_column('Class', "container").sort_by_column('ParentRelPos').keys()
+    #     # for container in containers:
+    #     #     vendor_type = self.snmp.get_property('ENTITY-MIB', 'entPhysicalVendorType', container)
+    #     #     if 'uppermodulebay' in vendor_type.lower():
+    #     #         upper_container = container
+    #     #     if 'lowermodulebay' in vendor_type.lower():
+    #     #         lower_container = container
+    #     if lower_container and upper_container:
+    #         child_upper_items_len = len(self.entity_table.filter_by_column('ContainedIn', str(upper_container)
+    #                                                                        ).sort_by_column('ParentRelPos').keys())
+    #         child_lower_items = self.entity_table.filter_by_column('ContainedIn', str(lower_container)
+    #                                                                ).sort_by_column('ParentRelPos').keys()
+    #         for child in child_lower_items:
+    #             self.entity_table[child]['entPhysicalContainedIn'] = upper_container
+    #             self.entity_table[child]['entPhysicalParentRelPos'] = str(child_upper_items_len + int(
+    #                 self.entity_table[child]['entPhysicalParentRelPos']))
 
     def add_relative_paths(self):
         """Build dictionary of relative paths for each module and port
@@ -368,9 +368,13 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
                     model = model.split(':')[-1]
 
             serial_number = ''
-            serail_number_match = re.search(r'code:\S+', self.entity_table[chassis]['entPhysicalDescr'], re.IGNORECASE)
-            if serail_number_match:
-                serial_number = serail_number_match.group().replace('code:', '')
+            backplane_dict = self.entity_table.filter_by_column('Class', 'backplane').sort_by_column('ContainedIn')
+            for key, value in backplane_dict.iteritems():
+                if chassis == int(value['entPhysicalContainedIn']):
+                    serial_number_match = re.search('(?<=SN:)\s*\S+', self.entity_table[key]['entPhysicalDescr'],)
+                    if serial_number_match:
+                        serial_number = serial_number_match.group()
+                        break
 
             chassis_details_map = {
                 'chassis_model': model,
@@ -395,7 +399,7 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
             module_id = self.relative_path[module]
             module_index = self._get_resource_id(module)
             module_details_map = {'module_model': '', 'version': '', 'serial_number': ''}
-            model_description = re.search('^(?P<module_model>.*)\s+sn:(?P<serial_number>.*)\s+rev:(?P<version>.*) mfg',
+            model_description = re.search(self.module_details_regexp,
                                           self.entity_table[module]['entPhysicalDescr'], re.IGNORECASE)
             if model_description:
                 module_details_map.update(model_description.groupdict())
@@ -502,10 +506,11 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
         self.logger.info('Load Ports:')
         for port in self.port_list:
             attribute_map = {}
-            interface_name = self.entity_table[port]['entPhysicalDescr']
+            interface_name = self.entity_table[port]['entPhysicalDescr'].lower()
             if self.port_ethernet_vendor_type_pattern != '' and re.search(self.port_ethernet_vendor_type_pattern,
-                         self.entity_table[port]['entPhysicalVendorType'], re.IGNORECASE):
-                interface_name = re.sub(r'.*unknown', 'ethernet', interface_name.lower())
+                                                                          self.entity_table[port][
+                                                                              'entPhysicalVendorType'], re.IGNORECASE):
+                interface_name = re.sub(r'.*unknown', 'ethernet', interface_name)
             match_data = re.search('.*(\d+/)+?\d+', interface_name)
             if match_data:
                 interface_name = match_data.group()
@@ -514,7 +519,8 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
                 if_table_port_attr = {'ifType': 'str', 'ifPhysAddress': 'str', 'ifMtu': 'int', 'ifSpeed': 'int'}
                 if_table = self.if_table[self.port_mapping[port]].copy()
                 if_table.update(self.snmp.get_properties('IF-MIB', self.port_mapping[port], if_table_port_attr))
-                interface_name = self.snmp.get_property('IF-MIB', 'ifName', self.port_mapping[port]).replace("'", '')
+                interface_name = self.snmp.get_property('IF-MIB', 'ifName', self.port_mapping[port]).replace("'",
+                                                                                                             '').lower()
                 interface_type = if_table[self.port_mapping[port]]['ifType'].replace('/', '').replace("'", '')
                 attribute_map = {'l2_protocol_type': interface_type,
                                  'mac': if_table[self.port_mapping[port]]['ifPhysAddress'],
@@ -522,8 +528,14 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
                                  'bandwidth': if_table[self.port_mapping[port]]['ifSpeed'],
                                  'description': self.snmp.get_property('IF-MIB', 'ifAlias', self.port_mapping[port]),
                                  'adjacent': self._get_adjacent(self.port_mapping[port])}
-                attribute_map.update(self._get_interface_details(self.port_mapping[port]))
                 attribute_map.update(self._get_ip_interface_details(self.port_mapping[port]))
+
+            attribute_map.update(self._get_interface_details(port))
+
+            interface_name_match = re.search('^(?P<port>port)\s*(?P<name>\S+)\s*(?P<id>(\d+/)?\d+)', interface_name)
+            if interface_name_match:
+                name_dict = interface_name_match.groupdict()
+                interface_name = '{0} {1} {2}'.format(name_dict['name'], name_dict['port'], name_dict['id'])
 
             if 'l2_protocol_type' not in attribute_map.keys():
                 attribute_map['l2_protocol_type'] = ''
@@ -532,7 +544,8 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
                 elif 'pos' in self.entity_table[port]['entPhysicalVendorType'].lower():
                     attribute_map['l2_protocol_type'] = 'pos'
 
-            port_object = Port(name=interface_name.replace('/', '-').title(), relative_path=self.relative_path[port], **attribute_map)
+            port_object = Port(name=interface_name.replace('/', '-').title(), relative_path=self.relative_path[port],
+                               **attribute_map)
             self._add_resource(port_object)
             self.logger.info('Added ' + interface_name + ' Port')
         self.logger.info('Load port completed.')
@@ -602,17 +615,19 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
         """
 
         interface_details = {'duplex': 'Full', 'auto_negotiation': 'False'}
-        try:
-            auto_negotiation = self.snmp.get(('MAU-MIB', 'ifMauAutoNegAdminStatus', port_index, 1)).values()[0]
-            if 'enabled' in auto_negotiation.lower():
-                interface_details['auto_negotiation'] = 'True'
-        except Exception as e:
-            self.logger.error('Failed to load auto negotiation property for interface {0}'.format(e.message))
-        for key, value in self.duplex_table.iteritems():
-            if 'dot3StatsIndex' in value.keys() and value['dot3StatsIndex'] == str(port_index):
-                interface_duplex = self.snmp.get_property('EtherLike-MIB', 'dot3StatsDuplexStatus', key)
-                if 'halfDuplex' in interface_duplex:
-                    interface_details['duplex'] = 'Half'
+        if port_index in self.port_mapping:
+            try:
+                auto_negotiation = \
+                self.snmp.get(('MAU-MIB', 'ifMauAutoNegAdminStatus', self.port_mapping[port_index], 1)).values()[0]
+                if 'enabled' in auto_negotiation.lower():
+                    interface_details['auto_negotiation'] = 'True'
+            except Exception as e:
+                self.logger.error('Failed to load auto negotiation property for interface {0}'.format(e.message))
+            for key, value in self.duplex_table.iteritems():
+                if 'dot3StatsIndex' in value.keys() and value['dot3StatsIndex'] == str(self.port_mapping[port_index]):
+                    interface_duplex = self.snmp.get_property('EtherLike-MIB', 'dot3StatsDuplexStatus', key)
+                    if 'halfDuplex' in interface_duplex:
+                        interface_details['duplex'] = 'Half'
         return interface_details
 
     def _get_device_details(self):
@@ -628,8 +643,8 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
                   'contact': self.snmp.get_property('SNMPv2-MIB', 'sysContact', 0),
                   'version': ''}
 
-        match_version = re.search(r'Version\s+(?P<software_version>\S+)\S*\s+',
-                                  self.snmp.get_property('SNMPv2-MIB', 'sysDescr', 0))
+        match_version = re.search(r'(Version|Ericsson)\s*(?P<software_version>(IP|SE)OS\S+)\s+',
+                                  self.snmp.get_property('SNMPv2-MIB', 'sysDescr', 0), re.IGNORECASE)
         if match_version:
             result['version'] = match_version.groupdict()['software_version'].replace(',', '')
 
@@ -665,7 +680,7 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
         """
 
         result = ''
-        snmp_object_id = self.snmp.get_property('SNMPv2-MIB', 'sysObjectID', 0)
+        # snmp_object_id = self.snmp.get_property('SNMPv2-MIB', 'sysObjectID', 0)
         # match_name = re.search(r'\.(?P<model>\d+$)', snmp_object_id)
         # if match_name:
         #     model = match_name.groupdict()['model']
@@ -675,7 +690,8 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
             self.snmp.load_mib(self.load_mib_list)
             match_name = re.search(r'::(?P<model>\S+$)', self.snmp.get_property('SNMPv2-MIB', 'sysObjectID', '0'))
             if match_name:
-                result = match_name.groupdict()['model'].capitalize()
+                result = match_name.groupdict()['model']
+                result = re.sub('rbn', '', result).capitalize()
         return result
 
     def _get_mapping(self, port_index, port_descr):
