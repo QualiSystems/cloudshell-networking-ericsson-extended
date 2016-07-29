@@ -55,11 +55,12 @@ class EricssonFirmwareOperations(FirmwareOperationsInterface):
         output = self.cli.send_command('release download {0}'.format(full_image_path), expected_map=expected_map)
         if not re.search('[Ii]nstallation [Cc]ompleted [Ss]uccessfully', output, re.IGNORECASE):
             message = ''
-            match_error = re.search("can't connect.*connection timed out|Error.*\n|[Ll]ogin [Ff]ailed",
+            match_error = re.search("can't connect.*connection timed out|Error.*\n|[Ll]ogin [Ff]ailed|\S+\s+fail(ed)?",
                                     output, re.IGNORECASE)
             if match_error:
                 message = match_error.group()
-            raise Exception('EricssonConfigurationOperations', 'Failed to load firmware: {0}'.format(message))
+            raise Exception('EricssonConfigurationOperations',
+                            'Failed to load firmware: {0}. Please see logs for details'.format(message))
         self.logger.info('Firmware has been successfully loaded to the device')
 
         if self.install_and_reboot():
