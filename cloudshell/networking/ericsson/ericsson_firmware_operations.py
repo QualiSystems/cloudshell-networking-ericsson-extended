@@ -42,6 +42,7 @@ class EricssonFirmwareOperations(FirmwareOperationsInterface):
         return self._cli
 
     def update_firmware(self, remote_host, file_path, size_of_firmware=20):
+        image_version = ''
         image_version_match = re.search(r'(?=\d)\S+(?=.tar)', file_path, re.IGNORECASE)
         if image_version_match:
             image_version = image_version_match.group()
@@ -51,7 +52,7 @@ class EricssonFirmwareOperations(FirmwareOperationsInterface):
             full_image_path = remote_host + '/' + file_path
         expected_map = {'[\[\(][Yy]/[Nn][\)\]]': lambda session: session.send_line('y'),
                         'overwrite': lambda session: session.send_line('y')}
-        output = self.cli.send_command('release download {0}'.format(full_image_path))
+        output = self.cli.send_command('release download {0}'.format(full_image_path), expected_map=expected_map)
         if not re.search('[Ii]nstallation [Cc]ompleted [Ss]uccessfully', output, re.IGNORECASE):
             message = ''
             match_error = re.search("can't connect.*connection timed out|Error.*\n|[Ll]ogin [Ff]ailed",
@@ -80,13 +81,13 @@ class EricssonFirmwareOperations(FirmwareOperationsInterface):
                         }
         try:
             self.logger.info('Start installation of the new image:')
-            self.cli.send_command(command='release upgrade', expected_map=expected_map, timeout=3)
+            self.cli.send_command(command='release upgrade', expected_map=expected_map, timeout=3, retries=30)
 
         except Exception as e:
             session_type = self.cli.get_session_type()
 
             if not session_type == 'CONSOLE':
-                self._logger.info('Session type is \'{}\', closing session...'.format(session_type))
+                self.logger.info('Session type is \'{}\', closing session...'.format(session_type))
                 self.cli.destroy_threaded_session()
 
         self.logger.info('Wait 20 seconds for device to reload...')
@@ -101,7 +102,7 @@ class EricssonFirmwareOperations(FirmwareOperationsInterface):
             try:
                 self.logger.debug('Trying to send command to device ... (retry {} of {}'.format(retry, retries))
                 output = self.cli.send_command(command='', expected_str='(?<![#\n])[#>] *$', expected_map={}, timeout=5,
-                                               is_need_default_prompt=False)
+                                               retries=50, is_need_default_prompt=False)
                 if len(output) == 0:
                     continue
 
