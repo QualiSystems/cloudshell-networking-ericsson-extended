@@ -1,4 +1,5 @@
 import re
+from collections import OrderedDict
 
 import inject
 import time
@@ -41,6 +42,10 @@ class EricssonFirmwareOperations(FirmwareOperationsInterface):
             self._cli = inject.instance(CLI_SERVICE)
         return self._cli
 
+    def rerun_image_loading(self, session, command):
+        session.hardware_expect('n')
+        session.send_line(command)
+
     def update_firmware(self, remote_host, file_path, size_of_firmware=20):
         image_version = ''
         image_version_match = re.search(r'(?=\d)\S+(?=.tar)', file_path, re.IGNORECASE)
@@ -50,12 +55,19 @@ class EricssonFirmwareOperations(FirmwareOperationsInterface):
             full_image_path = remote_host + file_path
         else:
             full_image_path = remote_host + '/' + file_path
-        expected_map = {'[\[\(][Yy]/[Nn][\)\]]': lambda session: session.send_line('y'),
-                        'overwrite': lambda session: session.send_line('y')}
+
+        expected_map = OrderedDict()
+        expected_map['download\s+in\s+progress\s+[\[\(][Yy]/[Nn][\)\]]'] = (
+            lambda session: self.rerun_image_loading(session, 'release download {0}'.format(full_image_path)))
+        expected_map['[\[\(][Yy]/[Nn][\)\]]'] = lambda session: session.send_line('y')
+        expected_map['overwrite'] = lambda session: session.send_line('y')
+        
         output = self.cli.send_command('release download {0}'.format(full_image_path), expected_map=expected_map)
-        if not re.search('[Ii]nstallation [Cc]ompleted [Ss]uccessfully', output, re.IGNORECASE):
+        if not re.search('[Ii]nstallation [Cc]ompleted [Ss]uccessfully|Release distribution completed', output,
+                         re.IGNORECASE):
             message = ''
-            match_error = re.search("can't connect.*connection timed out|Error.*\n|[Ll]ogin [Ff]ailed|\S+\s+fail(ed)?",
+            match_error = re.search("can't connect.*connection timed out|Error.*\n|[Ll]ogin [Ff]ailed|\S+\s+fail(ed)?" +
+                                    "|release download already in progress, unable to continue",
                                     output, re.IGNORECASE)
             if match_error:
                 message = match_error.group()
@@ -76,13 +88,16 @@ class EricssonFirmwareOperations(FirmwareOperationsInterface):
         :param retries: amount of retires to get response from device after it will be rebooted
         """
 
-        expected_map = {'[\[\(][Yy]es/[Nn]o[\)\]]|\[confirm\]': lambda session: session.send_line('yes'),
-                        '\(y\/n\)|continue': lambda session: session.send_line('y'),
-                        '[\[\(][Yy]/[Nn][\)\]]': lambda session: session.send_line('y')
-                        }
+        expected_map = OrderedDict()
+        expected_map['save.*configuration'] = lambda session: session.send_line('n')
+        expected_map['[\[\(][Yy]es/[Nn]o[\)\]]|\[confirm\]'] = lambda session: session.send_line('yes')
+        expected_map['\(y\/n\)|continue'] = lambda session: session.send_line('y')
+        expected_map['[\[\(][Yy]/[Nn][\)\]]'] = lambda session: session.send_line('y')
+
         try:
             self.logger.info('Start installation of the new image:')
-            self.cli.send_command(command='release upgrade', expected_map=expected_map, timeout=3, retries=30)
+            self.cli.send_command(command='release upgrade', expected_map=expected_map, timeout=3, retries=15,
+                                  command_retries=1)
 
         except Exception as e:
             session_type = self.cli.get_session_type()
