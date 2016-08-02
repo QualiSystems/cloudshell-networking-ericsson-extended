@@ -8,7 +8,44 @@ from cloudshell.cli.command_template.command_template_service import add_templat
 from cloudshell.shell.core.context_utils import get_resource_name
 
 
+def get_port_configuration(port_name, vlan_id, qnq, interface_name):
+    command_list = []
+    port_conf_command = 'port {0}'.format(port_name)
+    command_list.append(port_conf_command)
+    command_list.append('no shutdown')
+    command_list.append('encapsulation dot1q')
+    if qnq:
+        command_list.append('dot1q pvc {0} encapsulation 1qtunnel'.format(vlan_id))
+    else:
+        command_list.append('dot1q pvc {0}'.format(vlan_id))
+    command_list.append('bind interface {0} local'.format(interface_name))
+    command_list.append('end')
+    return command_list
+
+
+def remove_port_configuration(port_name):
+    return ['port {0}'.format(port_name), 'no encapsulation dot1q', 'end']
+
+
+def get_interface_configuration(interface_name):
+    commands_list = ['context local']
+    interface_conf_command = 'interface {0}'.format(interface_name)
+    commands_list.append(interface_conf_command)
+    commands_list.append('end')
+    return commands_list
+
+
+def remove_interface_configuration(interface_name):
+    commands_list = ['context local']
+    interface_conf_command = 'no interface {0}'.format(interface_name)
+    commands_list.append(interface_conf_command)
+    commands_list.append('end')
+    return commands_list
+
+
 class EricssonConnectivityOperations(ConnectivityOperations):
+    INTERFACE_CONFIGURATION_FLOW = {}
+
     def __init__(self, cli=None, logger=None, api=None, resource_name=None):
         ConnectivityOperations.__init__(self)
         self._cli = cli
@@ -90,16 +127,16 @@ class EricssonConnectivityOperations(ConnectivityOperations):
         self.cli.exit_configuration_mode()
         return result
 
-    @staticmethod
-    def _load_vlan_command_templates():
-        """Load all required Commandtemplates to configure valn on certain port
-
-        """
-
-        # add_templates(ETHERNET_COMMANDS_TEMPLATES)
-        # add_templates(VLAN_COMMANDS_TEMPLATES)
-        # add_templates(ENTER_INTERFACE_CONF_MODE)
-        pass
+    # @staticmethod
+    # def _load_vlan_command_templates():
+    #     """Load all required Commandtemplates to configure valn on certain port
+    #
+    #     """
+    #
+    #     # add_templates(ERICSSON_ETHERNET_COMMANDS_TEMPLATES)
+    #     # add_templates(VLAN_COMMANDS_TEMPLATES)
+    #     # add_templates(ENTER_INTERFACE_CONF_MODE)
+    #     pass
 
     def add_vlan(self, vlan_range, port, port_mode, qnq, ctag):
         """Configure specified vlan range in specified switchport mode on provided port
@@ -114,6 +151,11 @@ class EricssonConnectivityOperations(ConnectivityOperations):
         :rtype: string
         """
 
+        self.validate_vlan_methods_incoming_parameters(vlan_range, port, port_mode)
+        port_name = self.get_port_name(port)
+        interface_name = re.sub('\s+', '', port_name)
+        self.send_config_command_list(get_interface_configuration(interface_name))
+        self.send_config_command_list(get_port_configuration(port_name, vlan_range, qnq, interface_name))
         return 'Vlan Configuration Completed.'
 
     def remove_vlan(self, vlan_range, port, port_mode):
@@ -127,6 +169,12 @@ class EricssonConnectivityOperations(ConnectivityOperations):
         :rtype: string
         """
 
+        if not port or port == '':
+            raise Exception
+        port_name = self.get_port_name(port)
+        interface_name = re.sub('\s+', '', port_name)
+        self.send_config_command_list(remove_port_configuration(port_name))
+        self.send_config_command_list(remove_interface_configuration(interface_name))
         return 'Remove Vlan Completed.'
 
     def validate_vlan_methods_incoming_parameters(self, vlan_range, port, port_mode):
@@ -138,15 +186,20 @@ class EricssonConnectivityOperations(ConnectivityOperations):
         """
 
         self.logger.info('Validate incoming parameters for vlan configuration:')
+        if not validateVlanRange(vlan_range):
+            raise Exception('EricssonConnectivityOperations: validate_vlan_methods_incoming_parameters',
+                            'Vlan id or range is wrong')
+
         if not port:
-            raise Exception('CiscoHandlerBase: validate_vlan_methods_incoming_parameters ', 'Port list can\'t be empty.')
+            raise Exception('EricssonConnectivityOperations: validate_vlan_methods_incoming_parameters',
+                            'Port can\'t be empty.')
 
         if vlan_range == '' and port_mode == 'access':
-            raise Exception('CiscoHandlerBase: validate_vlan_methods_incoming_parameters',
+            raise Exception('EricssonConnectivityOperations: validate_vlan_methods_incoming_parameters',
                             'Switchport type is Access, vlan id/range can\'t be empty.')
 
         if (',' in vlan_range or '-' in vlan_range) and port_mode == 'access':
-            raise Exception('CiscoHandlerBase: validate_vlan_methods_incoming_parameters',
+            raise Exception('EricssonConnectivityOperations: validate_vlan_methods_incoming_parameters',
                             'Interface in Access mode, vlan range is not allowed, only one vlan can be assigned.')
 
     def get_port_name(self, port):
@@ -162,31 +215,12 @@ class EricssonConnectivityOperations(ConnectivityOperations):
         if not temp_port_full_name:
             err_msg = 'Failed to get port name.'
             self.logger.error(err_msg)
-            raise Exception('Cisco OS: get_port_name', err_msg)
+            raise Exception('EricssonConnectivityOperations: get_port_name', err_msg)
 
         temp_port_name = temp_port_full_name.split('/')[-1]
         if 'port-channel' not in temp_port_full_name.lower():
             temp_port_name = temp_port_name.replace('-', '/')
+        port_name = re.sub('\s*port', '', temp_port_name, flags=re.IGNORECASE)
 
         self.logger.info('Interface name validation OK, portname = {0}'.format(temp_port_name))
-        return temp_port_name
-
-    def configure_vlan_on_interface(self, commands_dict):
-        """Configure vlan on specified interface/s
-
-        :param commands_dict: dictionary of parameters
-        :return: success message
-        :rtype: string
-        """
-
-        return 'Vlan configuration completed.'
-
-    def configure_vlan(self, ordered_parameters_dict):
-        """Configure vlan
-
-        :param ordered_parameters_dict: dictionary of parameters
-        :return: success message
-        :rtype: string
-        """
-
-        return 'Vlan configuration completed.'
+        return port_name

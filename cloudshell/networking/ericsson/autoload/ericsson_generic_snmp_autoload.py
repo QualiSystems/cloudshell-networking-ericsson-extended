@@ -691,7 +691,7 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
             match_name = re.search(r'::(?P<model>\S+$)', self.snmp.get_property('SNMPv2-MIB', 'sysObjectID', '0'))
             if match_name:
                 result = match_name.groupdict()['model']
-                result = re.sub('rbn', '', result).capitalize()
+                result = re.sub('rbn|erirouter', '', result, flags=re.IGNORECASE).capitalize()
         return result
 
     def _get_mapping(self, port_index, port_descr):
