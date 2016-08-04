@@ -170,7 +170,8 @@ class EricssonConnectivityOperations(ConnectivityOperations):
         """
 
         if not port or port == '':
-            raise Exception
+            raise Exception('EricssonConnectivityOperations: validate_vlan_methods_incoming_parameters',
+                            'Port can\'t be empty.')
         port_name = self.get_port_name(port)
         interface_name = re.sub('\s+', '', port_name)
         self.send_config_command_list(remove_port_configuration(port_name))

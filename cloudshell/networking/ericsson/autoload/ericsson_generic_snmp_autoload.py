@@ -39,6 +39,9 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
         self.power_supply_list = []
         self.relative_path = {}
         self.port_mapping = {}
+        self.interface_mapping_mib = None
+        self.interface_mapping_key = None
+        self.interface_mapping_table = None
         self.port_exclude_pattern = r'serial|stack|engine|management|mgmt|voice|foreign'
         self.port_ethernet_vendor_type_pattern = ''
         self.vendor_type_exclusion_pattern = ''
@@ -155,11 +158,13 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
             raise Exception('Cannot load entPhysicalTable. Autoload cannot continue')
         self.logger.info('Entity table loaded')
 
+        if self.interface_mapping_mib and self.interface_mapping_key:
+            self.interface_mapping_table = self.snmp.get_table(self.interface_mapping_mib, self.interface_mapping_key)
         self.lldp_local_table = self.snmp.get_table('LLDP-MIB', 'lldpLocPortDesc')
         self.lldp_remote_table = self.snmp.get_table('LLDP-MIB', 'lldpRemTable')
         self.duplex_table = self.snmp.get_table('EtherLike-MIB', 'dot3StatsIndex')
-        self.ip_v4_table = self.snmp.get_table('IP-MIB', 'ipAddrTable')
-        self.ip_v6_table = self.snmp.get_table('IPV6-MIB', 'ipv6AddrEntry')
+        self.ip_v4_table = self.snmp.get_table('IP-MIB', 'ipAdEntIfIndex')
+        self.ip_v6_table = self.snmp.get_table('IPV6-MIB', 'ipAdEntIfIndex')
         self.port_channel_ports = self.snmp.get_table('IEEE8023-LAG-MIB', 'dot3adAggPortAttachedAggID')
 
         self.logger.info('MIB Tables loaded successfully')
@@ -463,10 +468,13 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
 
         if not self.if_table:
             return
-        port_channel_dic = {index: port for index, port in self.if_table.iteritems() if
-                            'channel' in port[self.IF_ENTITY] and '.' not in port[self.IF_ENTITY]}
+        port_channel_dict = {index: port for index, port in self.if_table.iteritems() if
+                            index not in self.port_mapping.values() and '.' not in port[self.IF_ENTITY]}
         self.logger.info('Loading Port Channels:')
-        for key, value in port_channel_dic.iteritems():
+        for key, value in port_channel_dict.iteritems():
+            type = self.snmp.get_property('IF-MIB', 'ifType', key)
+            if 'ieee8023adLag' not in type:
+                continue
             interface_model = value[self.IF_ENTITY]
             match_object = re.search(r'\d+$', interface_model)
             if match_object:
@@ -595,16 +603,28 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
         """
 
         interface_details = {'ipv4_address': '', 'ipv6_address': ''}
+
+        interface_id = None
+        if self.interface_mapping_table:
+            for key, value in self.interface_mapping_table.iteritems():
+                if self.interface_mapping_key in value:
+                    if str(port_index) == value[self.interface_mapping_key]:
+                        interface_id = int(key.split('.')[0])
+                        break
+
+        if not interface_id:
+            return interface_details
+
         if self.ip_v4_table and len(self.ip_v4_table) > 1:
             for key, value in self.ip_v4_table.iteritems():
-                if 'ipAdEntIfIndex' in value and int(value['ipAdEntIfIndex']) == port_index:
+                if 'ipAdEntIfIndex' in value and int(value['ipAdEntIfIndex']) == interface_id:
                     interface_details['ipv4_address'] = key
-                break
+                    break
         if self.ip_v6_table and len(self.ip_v6_table) > 1:
             for key, value in self.ip_v6_table.iteritems():
-                if 'ipAdEntIfIndex' in value and int(value['ipAdEntIfIndex']) == port_index:
+                if 'ipAdEntIfIndex' in value and int(value['ipAdEntIfIndex']) == interface_id:
                     interface_details['ipv6_address'] = key
-                break
+                    break
         return interface_details
 
     def _get_interface_details(self, port_index):
