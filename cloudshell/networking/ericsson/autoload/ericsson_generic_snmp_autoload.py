@@ -466,6 +466,7 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
         :return:
         """
 
+        existing_ids = []
         if not self.if_table:
             return
         port_channel_dict = {index: port for index, port in self.if_table.iteritems() if
@@ -476,16 +477,27 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
             if 'ieee8023adLag' not in type:
                 continue
             interface_model = value[self.IF_ENTITY]
+            if ':' in interface_model:
+                match_interface_name = re.search('\S+\d+\s+', interface_model)
+                if match_interface_name:
+                    interface_model = match_interface_name.group().strip(' ')
+
             match_object = re.search(r'\d+$', interface_model)
             if match_object:
-                interface_id = 'PC{0}'.format(match_object.group(0))
+                interface_id = match_object.group(0)
             else:
                 self.logger.error('Adding of {0} failed. Name is invalid'.format(interface_model))
                 continue
+
+            if interface_id in existing_ids:
+                interface_id = interface_id + interface_id
+
+            existing_ids.append(interface_id)
+
             attribute_map = {'description': self.snmp.get_property('IF-MIB', 'ifAlias', key),
                              'associated_ports': self._get_associated_ports(key)}
             attribute_map.update(self._get_ip_interface_details(key))
-            port_channel = PortChannel(name=interface_model, relative_path=interface_id, **attribute_map)
+            port_channel = PortChannel(name=interface_model, relative_path='PC{0}'.format(interface_id), **attribute_map)
             self._add_resource(port_channel)
 
             self.logger.info('Added ' + interface_model + ' Port Channel')

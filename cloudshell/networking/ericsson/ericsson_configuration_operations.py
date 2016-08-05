@@ -98,10 +98,13 @@ class EricssonConfigurationOperations(ConfigurationOperationsInterface):
                 destination_host = destination_host.replace(':{0}'.format(password), '')
             expected_map[r'[Pp]assword\s*:'] = lambda session: session.send_line(password)
 
+        if source_filename == 'startup' or source_filename == 'running':
+            source_filename += '-config'
         if source_filename == '':
             source_filename = 'configuration'
         if 'config' not in source_filename:
-            raise Exception('EricssonConfigurationOperations', "Source filename must be 'configuration'!")
+            raise Exception('EricssonConfigurationOperations', "Source filename must be 'running-config or" +
+                            " startup-config'!")
 
         if destination_host == '':
             raise Exception('EricssonConfigurationOperations', "Destination host can\'t be empty.")
@@ -110,8 +113,8 @@ class EricssonConfigurationOperations(ConfigurationOperationsInterface):
         if len(system_name) > 23:
             system_name = system_name[:23]
 
-        destination_filename = '{0}-{1}-{2}'.format(system_name, source_filename.replace('-config', ''),
-                                                    _get_time_stamp())
+        destination_filename = '{0}-{1}-{2}'.format(system_name, source_filename, _get_time_stamp())
+
         self.logger.info('destination filename is {0}'.format(destination_filename))
 
         if len(destination_host) <= 0:
@@ -125,14 +128,23 @@ class EricssonConfigurationOperations(ConfigurationOperationsInterface):
             destination_file = destination_host + '/' + destination_filename
 
         expected_map['overwrite'] = lambda session: session.send_line('y')
-        output = self.cli.send_command('save configuration {0}'.format(destination_file), expected_map=expected_map)
+        if 'startup' in source_filename.lower():
+            startup_config_file = self.cli.send_command('show configuration | include boot')
+            match_startup_config_file = re.search('\w+\.\w+', startup_config_file)
+            if not match_startup_config_file:
+                raise Exception('EricssonConfigurationOperations', 'no startup/boot configuration found')
+            startup_config = match_startup_config_file.group()
+            command = 'copy {0} {1}'.format(startup_config, destination_file)
+        else:
+            command = 'save configuration {0}'.format(destination_file)
+        output = self.cli.send_command(command, expected_map=expected_map)
         is_downloaded = self._check_download_from_tftp(output)
         if is_downloaded[0]:
             self.logger.info('Save configuration completed.')
             return '{0},'.format(destination_filename)
         else:
             self.logger.info('Save configuration failed with errors: {0}'.format(is_downloaded[1]))
-            raise Exception('Save configuration failed with errors:', is_downloaded[1])
+            raise Exception('EricssonConfigurationOperations', 'Save configuration failed with errors:', is_downloaded[1])
 
     def restore_configuration(self, source_file, config_type, restore_method='override', vrf=None):
         """Restore configuration on device from provided configuration file
@@ -158,7 +170,7 @@ class EricssonConfigurationOperations(ConfigurationOperationsInterface):
 
         self.logger.info('Restore device configuration from {}'.format(source_file))
 
-        match_data = re.search('config(uration)?', config_type)
+        match_data = re.search('startup|running?', config_type)
         if not match_data:
             msg = "Configuration type '{}' is wrong, use 'startup-config' or 'running-config'.".format(config_type)
             raise Exception('EricssonConfigurationOperations', msg)
@@ -166,7 +178,12 @@ class EricssonConfigurationOperations(ConfigurationOperationsInterface):
         destination_filename = match_data.group()
 
         expected_map['overwrite'] = lambda session: session.send_line('y')
-        output = self.cli.send_command('configure {0}'.format(source_file), expected_map=expected_map)
+        if 'startup' in destination_filename:
+            output = self.cli.send_command('copy {0} {1}'.format(source_file, 'startup-config.cfg'), expected_map=expected_map)
+            output += self.cli.send_config_command('boot configuration startup-config.cfg', expected_map=expected_map)
+        else:
+            output = self.cli.send_command('configure {0}'.format(source_file), expected_map=expected_map)
+
         is_downloaded = self._check_download_from_tftp(output)
         if is_downloaded[0] is True:
             self.cli.commit()
