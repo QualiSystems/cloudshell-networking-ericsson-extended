@@ -113,19 +113,6 @@ class EricssonConnectivityOperations(ConnectivityOperations):
                 return result
         return result
 
-    def _does_interface_support_qnq(self, interface_name):
-        """Validate whether qnq is supported for certain port
-
-        """
-
-        result = False
-        self.cli.send_config_command('interface {0}'.format(interface_name))
-        output = self.cli.send_config_command('switchport mode ?')
-        if 'dot1q-tunnel' in output.lower():
-            result = True
-        self.cli.exit_configuration_mode()
-        return result
-
     def add_vlan(self, vlan_range, port, port_mode, qnq, ctag):
         """Configure specified vlan range in specified switchport mode on provided port
 

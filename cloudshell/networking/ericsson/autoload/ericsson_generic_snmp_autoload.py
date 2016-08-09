@@ -65,6 +65,9 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
         return self._snmp
 
     def load_ericsson_mib(self):
+        """Adds Ericsson mibs to the QualiSnmp mibSources
+        """
+
         path = os.path.abspath(os.path.join(os.path.dirname(__file__), '', 'mib'))
         self.snmp.update_mib_sources(path)
 
@@ -147,7 +150,7 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
         raise Exception(error_message)
 
     def _load_snmp_tables(self):
-        """ Load all ericsson required snmp tables
+        """ Load all Ericsson required snmp tables
 
         :return:
         """
@@ -208,24 +211,6 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
             temp_entity_table.update(self.snmp.get_properties('ENTITY-MIB', index, entity_table_optional_port_attr)
                                      [index])
 
-            # if temp_entity_table['entPhysicalClass'] == '':
-            #     vendor_type = self.snmp.get_property('ENTITY-MIB', 'entPhysicalVendorType', index)
-            #     index_entity_class = None
-            #     if vendor_type == '':
-            #         continue
-            #     if 'cevcontainer' in vendor_type.lower():
-            #         index_entity_class = 'container'
-            #     elif 'cevchassis' in vendor_type.lower():
-            #         index_entity_class = 'chassis'
-            #     elif 'cevmodule' in vendor_type.lower():
-            #         index_entity_class = 'module'
-            #     elif 'cevport' in vendor_type.lower():
-            #         index_entity_class = 'port'
-            #     elif 'cevpowersupply' in vendor_type.lower():
-            #         index_entity_class = 'powerSupply'
-            #     if index_entity_class:
-            #         temp_entity_table['entPhysicalClass'] = index_entity_class
-            # else:
             temp_entity_table['entPhysicalClass'] = temp_entity_table['entPhysicalClass'].replace("'", "")
 
             if re.search(r'stack|chassis|module|port|powerSupply|container|backplane',
@@ -250,26 +235,6 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
         self._filter_entity_table(result_dict)
         return result_dict
 
-    # def _filter_lower_bay_containers(self):
-    #     upper_container = None
-    #     lower_container = None
-    #     containers = self.entity_table.filter_by_column('Class', "container").sort_by_column('ParentRelPos').keys()
-    #     # for container in containers:
-    #     #     vendor_type = self.snmp.get_property('ENTITY-MIB', 'entPhysicalVendorType', container)
-    #     #     if 'uppermodulebay' in vendor_type.lower():
-    #     #         upper_container = container
-    #     #     if 'lowermodulebay' in vendor_type.lower():
-    #     #         lower_container = container
-    #     if lower_container and upper_container:
-    #         child_upper_items_len = len(self.entity_table.filter_by_column('ContainedIn', str(upper_container)
-    #                                                                        ).sort_by_column('ParentRelPos').keys())
-    #         child_lower_items = self.entity_table.filter_by_column('ContainedIn', str(lower_container)
-    #                                                                ).sort_by_column('ParentRelPos').keys()
-    #         for child in child_lower_items:
-    #             self.entity_table[child]['entPhysicalContainedIn'] = upper_container
-    #             self.entity_table[child]['entPhysicalParentRelPos'] = str(child_upper_items_len + int(
-    #                 self.entity_table[child]['entPhysicalParentRelPos']))
-
     def add_relative_paths(self):
         """Build dictionary of relative paths for each module and port
 
@@ -291,6 +256,11 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
                 self.port_list.remove(port)
 
     def _get_port_relative_path(self, relative_id):
+        """Gets port relative address, handle situation when relative id is already exist on the same level
+
+        :return: relative_id
+        """
+
         if relative_id in self.relative_path.values():
             if '/' in relative_id:
                 ids = relative_id.split('/')
@@ -330,9 +300,14 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
                 else:
                     self._excluded_models.append(module)
 
-    def _get_module_parents(self, module_id):
+    def _get_module_parents(self, resource_id):
+        """Search for relative path of the certain resource's parent element
+
+        :return: parent relative path
+        """
+
         result = []
-        parent_id = int(self.entity_table[module_id]['entPhysicalContainedIn'])
+        parent_id = int(self.entity_table[resource_id]['entPhysicalContainedIn'])
         if parent_id > 0 and parent_id in self.entity_table:
             if re.search(r'module', self.entity_table[parent_id]['entPhysicalClass']):
                 result.append(parent_id)
@@ -344,6 +319,11 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
         return result
 
     def _get_resource_id(self, item_id):
+        """Gets resource relative id
+
+        :return: relative id
+        """
+
         parent_id = int(self.entity_table[item_id]['entPhysicalContainedIn'])
         if parent_id > 0 and parent_id in self.entity_table:
             if re.search(r'container|backplane', self.entity_table[parent_id]['entPhysicalClass']):
@@ -714,12 +694,6 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
         """
 
         result = ''
-        # snmp_object_id = self.snmp.get_property('SNMPv2-MIB', 'sysObjectID', 0)
-        # match_name = re.search(r'\.(?P<model>\d+$)', snmp_object_id)
-        # if match_name:
-        #     model = match_name.groupdict()['model']
-        #     if model in ericsson_RESOURCE_DRIVERS_MAP:
-        #         result = ericsson_RESOURCE_DRIVERS_MAP[model].lower().replace('_', '').capitalize()
         if not result or result == '':
             self.snmp.load_mib(self.load_mib_list)
             match_name = re.search(r'::(?P<model>\S+$)', self.snmp.get_property('SNMPv2-MIB', 'sysObjectID', '0'))

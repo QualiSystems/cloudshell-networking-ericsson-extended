@@ -46,7 +46,20 @@ class EricssonFirmwareOperations(FirmwareOperationsInterface):
         session.hardware_expect('n')
         session.send_line(command)
 
-    def update_firmware(self, remote_host, file_path, size_of_firmware=20):
+    def update_firmware(self, remote_host, file_path, size_of_firmware=2000000):
+        """Update firmware version on device by loading provided image, performs following steps:
+
+        1. Copy bin file from remote tftp server.
+        2. Clear in run config boot system section.
+        3. Set downloaded bin file as boot file and then reboot device.
+        4. Check if firmware was successfully installed.
+
+        :param remote_host: host with firmware
+        :param file_path: relative path on remote host
+        :param size_of_firmware: size in bytes
+        :return: status / exception
+        """
+
         image_version = ''
         image_version_match = re.search(r'(?=\d)\S+(?=.tar)', file_path, re.IGNORECASE)
         if image_version_match:
@@ -82,7 +95,7 @@ class EricssonFirmwareOperations(FirmwareOperationsInterface):
         return 'Success'
 
     def install_and_reboot(self, sleep_timeout=60, retries=15):
-        """Reload device
+        """Reload device using new image
 
         :param sleep_timeout: period of time, to wait for device to get back online
         :param retries: amount of retires to get response from device after it will be rebooted

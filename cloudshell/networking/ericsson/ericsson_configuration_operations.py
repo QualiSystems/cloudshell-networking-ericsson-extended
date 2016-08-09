@@ -52,6 +52,7 @@ class EricssonConfigurationOperations(ConfigurationOperationsInterface):
         :return True or False, and success or error message
         :rtype tuple
         """
+
         is_success = True
         status_match = re.search(r'^226\s+|Transfer\s+complete', output, re.IGNORECASE)
         message = ''
