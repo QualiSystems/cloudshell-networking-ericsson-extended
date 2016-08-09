@@ -1,10 +1,7 @@
 import inject
-from collections import OrderedDict
-import re
 
 from cloudshell.networking.networking_utils import *
 from cloudshell.networking.operations.connectivity_operations import ConnectivityOperations
-from cloudshell.cli.command_template.command_template_service import add_templates, get_commands_list
 from cloudshell.shell.core.context_utils import get_resource_name
 
 
@@ -50,6 +47,7 @@ class EricssonConnectivityOperations(ConnectivityOperations):
         ConnectivityOperations.__init__(self)
         self._cli = cli
         self._logger = logger
+        self.resource_name = resource_name
         self._api = api
         try:
             self.resource_name = get_resource_name()
@@ -126,17 +124,6 @@ class EricssonConnectivityOperations(ConnectivityOperations):
             result = True
         self.cli.exit_configuration_mode()
         return result
-
-    # @staticmethod
-    # def _load_vlan_command_templates():
-    #     """Load all required Commandtemplates to configure valn on certain port
-    #
-    #     """
-    #
-    #     # add_templates(ERICSSON_ETHERNET_COMMANDS_TEMPLATES)
-    #     # add_templates(VLAN_COMMANDS_TEMPLATES)
-    #     # add_templates(ENTER_INTERFACE_CONF_MODE)
-    #     pass
 
     def add_vlan(self, vlan_range, port, port_mode, qnq, ctag):
         """Configure specified vlan range in specified switchport mode on provided port
@@ -219,7 +206,9 @@ class EricssonConnectivityOperations(ConnectivityOperations):
             raise Exception('EricssonConnectivityOperations: get_port_name', err_msg)
 
         temp_port_name = temp_port_full_name.split('/')[-1]
-        if 'port-channel' not in temp_port_full_name.lower():
+        if 'unknown' in temp_port_full_name.lower():
+            raise Exception('EricssonConnectivityOperations: get_port_name' 'Cannot assign vlan to unknown port')
+        if 'ethernet' in temp_port_full_name.lower():
             temp_port_name = temp_port_name.replace('-', '/')
         port_name = re.sub('\s*port', '', temp_port_name, flags=re.IGNORECASE)
 

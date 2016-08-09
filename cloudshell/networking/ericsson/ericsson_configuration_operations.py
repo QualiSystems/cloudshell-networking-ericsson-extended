@@ -1,5 +1,4 @@
 import time
-from collections import OrderedDict
 
 from cloudshell.configuration.cloudshell_cli_binding_keys import CLI_SERVICE
 from cloudshell.configuration.cloudshell_shell_core_binding_keys import LOGGER, API
@@ -8,7 +7,6 @@ import re
 from cloudshell.networking.networking_utils import validateIP
 from cloudshell.networking.operations.interfaces.configuration_operations_interface import \
     ConfigurationOperationsInterface
-from cloudshell.networking.operations.interfaces.firmware_operations_interface import FirmwareOperationsInterface
 from cloudshell.shell.core.context_utils import get_resource_name
 
 
