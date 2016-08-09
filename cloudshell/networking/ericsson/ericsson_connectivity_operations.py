@@ -47,12 +47,13 @@ class EricssonConnectivityOperations(ConnectivityOperations):
         ConnectivityOperations.__init__(self)
         self._cli = cli
         self._logger = logger
-        self.resource_name = resource_name
         self._api = api
-        try:
-            self.resource_name = get_resource_name()
-        except Exception:
-            raise Exception('CiscoHandlerBase', 'Failed to get ResourceName.')
+        self.resource_name = resource_name
+        if not self.resource_name:
+            try:
+                self.resource_name = get_resource_name()
+            except Exception:
+                raise Exception('EricssonConnectivityOperations', 'Failed to get ResourceName.')
 
     @property
     def logger(self):
@@ -60,7 +61,7 @@ class EricssonConnectivityOperations(ConnectivityOperations):
             try:
                 self._logger = inject.instance('logger')
             except:
-                raise Exception('CiscoConnectivityOperations', 'Failed to get logger.')
+                raise Exception('EricssonConnectivityOperations', 'Failed to get logger.')
         return self._logger
 
     @property
@@ -69,7 +70,7 @@ class EricssonConnectivityOperations(ConnectivityOperations):
             try:
                 self._cli = inject.instance('cli_service')
             except:
-                raise Exception('CiscoConnectivityOperations', 'Failed to get cli_service.')
+                raise Exception('EricssonConnectivityOperations', 'Failed to get cli_service.')
         return self._cli
 
     @property
@@ -78,7 +79,7 @@ class EricssonConnectivityOperations(ConnectivityOperations):
             try:
                 self._api = inject.instance('api')
             except:
-                raise Exception('CiscoConnectivityOperations', 'Failed to get api handler.')
+                raise Exception('EricssonConnectivityOperations', 'Failed to get api handler.')
         return self._api
 
     def send_config_command_list(self, command_list, expected_map=None):
@@ -205,12 +206,12 @@ class EricssonConnectivityOperations(ConnectivityOperations):
             self.logger.error(err_msg)
             raise Exception('EricssonConnectivityOperations: get_port_name', err_msg)
 
-        temp_port_name = temp_port_full_name.split('/')[-1]
+        port_name = temp_port_full_name.split('/')[-1]
         if 'unknown' in temp_port_full_name.lower():
             raise Exception('EricssonConnectivityOperations: get_port_name' 'Cannot assign vlan to unknown port')
         if 'ethernet' in temp_port_full_name.lower():
-            temp_port_name = temp_port_name.replace('-', '/')
-        port_name = re.sub('\s*port', '', temp_port_name, flags=re.IGNORECASE)
+            port_name = port_name.replace('-', '/')
+            port_name = re.sub('\s*port', '', port_name, flags=re.IGNORECASE)
 
-        self.logger.info('Interface name validation OK, portname = {0}'.format(temp_port_name))
+        self.logger.info('Interface name validation OK, portname = {0}'.format(port_name))
         return port_name
