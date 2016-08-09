@@ -69,6 +69,9 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
         self.snmp.update_mib_sources(path)
 
     def discover(self):
+        pass
+
+    def get_autoload_details(self):
         """General entry point for autoload,
         read device structure and attributes: chassis, modules, submodules, ports, port-channels and power supplies
 
@@ -92,7 +95,6 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
                 if chassis_id == '-1':
                     chassis_id = '0'
                 self.relative_path[chassis] = chassis_id
-        # self._filter_lower_bay_containers()
         self.get_module_list()
         self.add_relative_paths()
         self._get_chassis_attributes(self.chassis_list)
