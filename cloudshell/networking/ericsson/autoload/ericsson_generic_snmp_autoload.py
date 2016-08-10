@@ -1,4 +1,5 @@
 import time
+import math
 
 from cloudshell.configuration.cloudshell_shell_core_binding_keys import LOGGER
 from cloudshell.configuration.cloudshell_snmp_binding_keys import SNMP_HANDLER
@@ -358,7 +359,8 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
             backplane_dict = self.entity_table.filter_by_column('Class', 'backplane').sort_by_column('ContainedIn')
             for key, value in backplane_dict.iteritems():
                 if chassis == int(value['entPhysicalContainedIn']):
-                    serial_number_match = re.search('(?<=SN:)\s*\S+', self.entity_table[key]['entPhysicalDescr'],)
+                    serial_number_match = re.search('(?<=SN:)\s*\S+', self.entity_table[key]['entPhysicalDescr'],
+                                                    re.IGNORECASE)
                     if serial_number_match:
                         serial_number = serial_number_match.group()
                         break
@@ -452,7 +454,7 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
         if not self.if_table:
             return
         port_channel_dict = {index: port for index, port in self.if_table.iteritems() if
-                            index not in self.port_mapping.values() and '.' not in port[self.IF_ENTITY]}
+                             index not in self.port_mapping.values() and '.' not in port[self.IF_ENTITY]}
         self.logger.info('Loading Port Channels:')
         for key, value in port_channel_dict.iteritems():
             type = self.snmp.get_property('IF-MIB', 'ifType', key)
@@ -479,7 +481,8 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
             attribute_map = {'description': self.snmp.get_property('IF-MIB', 'ifAlias', key),
                              'associated_ports': self._get_associated_ports(key)}
             attribute_map.update(self._get_ip_interface_details(key))
-            port_channel = PortChannel(name=interface_model, relative_path='PC{0}'.format(interface_id), **attribute_map)
+            port_channel = PortChannel(name=interface_model, relative_path='PC{0}'.format(interface_id),
+                                       **attribute_map)
             self._add_resource(port_channel)
 
             self.logger.info('Added ' + interface_model + ' Port Channel')
@@ -527,7 +530,7 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
                 attribute_map = {'l2_protocol_type': interface_type,
                                  'mac': if_table[self.port_mapping[port]]['ifPhysAddress'],
                                  'mtu': if_table[self.port_mapping[port]]['ifMtu'],
-                                 'bandwidth': if_table[self.port_mapping[port]]['ifSpeed'],
+                                 'bandwidth': self.convert_bandwidth(if_table[self.port_mapping[port]]['ifSpeed']),
                                  'description': self.snmp.get_property('IF-MIB', 'ifAlias', self.port_mapping[port]),
                                  'adjacent': self._get_adjacent(self.port_mapping[port])}
                 attribute_map.update(self._get_ip_interface_details(self.port_mapping[port]))
@@ -632,7 +635,7 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
         if port_index in self.port_mapping:
             try:
                 auto_negotiation = \
-                self.snmp.get(('MAU-MIB', 'ifMauAutoNegAdminStatus', self.port_mapping[port_index], 1)).values()[0]
+                    self.snmp.get(('MAU-MIB', 'ifMauAutoNegAdminStatus', self.port_mapping[port_index], 1)).values()[0]
                 if 'enabled' in auto_negotiation.lower():
                     interface_details['auto_negotiation'] = 'True'
             except Exception as e:
@@ -724,3 +727,14 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
                     port_id = int(interface['suffix'])
                     break
         return port_id
+
+    def convert_bandwidth(self, bandwidth):
+        try:
+            speed = int(bandwidth)
+        except:
+            return '0'
+        if speed == 0:
+            result = '0'
+        else:
+            result = str(round(speed / math.pow(1024, 2), 2))
+        return result
