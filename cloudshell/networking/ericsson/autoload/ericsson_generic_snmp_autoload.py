@@ -1,5 +1,4 @@
 import time
-import math
 
 from cloudshell.configuration.cloudshell_shell_core_binding_keys import LOGGER
 from cloudshell.configuration.cloudshell_snmp_binding_keys import SNMP_HANDLER
@@ -521,7 +520,7 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
                 interface_name = match_data.group()
 
             if port in self.port_mapping.keys() and self.port_mapping[port] in self.if_table:
-                if_table_port_attr = {'ifType': 'str', 'ifPhysAddress': 'str', 'ifMtu': 'int', 'ifSpeed': 'int'}
+                if_table_port_attr = {'ifType': 'str', 'ifPhysAddress': 'str', 'ifMtu': 'int', 'ifHighSpeed': 'int'}
                 if_table = self.if_table[self.port_mapping[port]].copy()
                 if_table.update(self.snmp.get_properties('IF-MIB', self.port_mapping[port], if_table_port_attr))
                 interface_name = self.snmp.get_property('IF-MIB', 'ifName', self.port_mapping[port]).replace("'",
@@ -530,7 +529,7 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
                 attribute_map = {'l2_protocol_type': interface_type,
                                  'mac': if_table[self.port_mapping[port]]['ifPhysAddress'],
                                  'mtu': if_table[self.port_mapping[port]]['ifMtu'],
-                                 'bandwidth': self.convert_bandwidth(if_table[self.port_mapping[port]]['ifSpeed']),
+                                 'bandwidth': if_table[self.port_mapping[port]]['ifHighSpeed'],
                                  'description': self.snmp.get_property('IF-MIB', 'ifAlias', self.port_mapping[port]),
                                  'adjacent': self._get_adjacent(self.port_mapping[port])}
                 attribute_map.update(self._get_ip_interface_details(self.port_mapping[port]))
@@ -727,14 +726,3 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
                     port_id = int(interface['suffix'])
                     break
         return port_id
-
-    def convert_bandwidth(self, bandwidth):
-        try:
-            speed = int(bandwidth)
-        except:
-            return '0'
-        if speed == 0:
-            result = '0'
-        else:
-            result = str(round(speed / math.pow(1024, 2), 2))
-        return result
