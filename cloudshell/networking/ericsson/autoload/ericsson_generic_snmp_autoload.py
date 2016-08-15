@@ -432,7 +432,7 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
             relative_path = '{0}/PP{1}-{2}'.format(chassis_id, parent_id, port_id)
             port_name = 'PP{0}'.format(self.power_supply_list.index(port))
             port_details = {'port_model': '', 'description': '', 'version': '', 'serial_number': ''}
-            port_description = re.search('^(?P<port_model>.*)\s+sn:(?P<serial_number>.*)\s+' +
+            port_description = re.search(r'^(?P<port_model>.*)\s+sn:(?P<serial_number>.*)\s+' +
                                          'rev:(?P<version>.*)\s+(?P<description>mfg.*)$',
                                          self.entity_table[port]['entPhysicalDescr'], re.IGNORECASE)
             if port_description:
@@ -461,7 +461,7 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
                 continue
             interface_model = value[self.IF_ENTITY]
             if ':' in interface_model:
-                match_interface_name = re.search('\S+\d+\s+', interface_model)
+                match_interface_name = re.search(r'\S+\d+\s+', interface_model)
                 if match_interface_name:
                     interface_model = match_interface_name.group().strip(' ')
 
@@ -536,7 +536,7 @@ class EricssonGenericSNMPAutoload(AutoloadOperationsInterface):
 
             attribute_map.update(self._get_interface_details(port))
 
-            interface_name_match = re.search('^(?P<port>port)\s*(?P<name>\S+)\s*(?P<id>(\d+/)?\d+)', interface_name)
+            interface_name_match = re.search(r'^(?P<port>port)\s*(?P<name>\S+)\s*(?P<id>(\d+/)?\d+)', interface_name)
             if interface_name_match:
                 name_dict = interface_name_match.groupdict()
                 interface_name = '{0} {1} {2}'.format(name_dict['name'], name_dict['port'], name_dict['id'])
