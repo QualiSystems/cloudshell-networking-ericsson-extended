@@ -58,24 +58,25 @@ class EricssonConfigurationOperations(ConfigurationOperationsInterface):
         message = ''
         if not status_match:
             is_success = False
-            match_error = re.search(r"can't connect.*connection timed out|Error.*\n|[Ll]ogin [Ff]ailed", output, re.IGNORECASE)
+            match_error = re.search(r"can't connect.*connection timed out|Error.*\n|[Ll]ogin [Ff]ailed", output,
+                                    re.IGNORECASE)
             if match_error:
                 self.logger.error(message)
                 message += match_error.group().replace('%', '')
 
         return is_success, message
 
-    def _get_resource_attribute(self, resource_full_path, attribute_name):
+    def _get_resource_attribute(self, resource_name, attribute_name):
         """Get resource attribute by provided attribute_name
 
-        :param resource_full_path: resource name or full name
+        :param resource_name: resource name or full name
         :param attribute_name: name of the attribute
         :return: attribute value
         :rtype: string
         """
 
         try:
-            result = self.api.GetAttributeValue(resource_full_path, attribute_name).Value
+            result = self.api.GetAttributeValue(resource_name, attribute_name).Value
         except Exception as e:
             raise Exception(e.message)
         return result
@@ -89,9 +90,16 @@ class EricssonConfigurationOperations(ConfigurationOperationsInterface):
         """
 
         expected_map = {}
+        if not destination_host:
+            destination_host = self._get_resource_attribute(self.resource_name, 'Backup Location')
+
+        if not destination_host:
+            raise Exception('EricssonConfigurationOperations', 'Folder Path parameter and Backup Location attribute ' +
+                            'are empty!')
+
         if destination_host.startswith('ftp'):
             password = ''
-            password_match = re.search('(?<=:)\S+?(?=\@)', destination_host.replace('ftp:',''), re.IGNORECASE)
+            password_match = re.search('(?<=:)\S+?(?=\@)', destination_host.replace('ftp:', ''), re.IGNORECASE)
             if password_match:
                 password = password_match.group()
                 destination_host = destination_host.replace(':{0}'.format(password), '')
@@ -128,12 +136,14 @@ class EricssonConfigurationOperations(ConfigurationOperationsInterface):
 
         expected_map['overwrite'] = lambda session: session.send_line('y')
         if 'startup' in source_filename.lower():
-            startup_config_file = self.cli.send_command('show configuration | include boot')
-            match_startup_config_file = re.search('\w+\.\w+', startup_config_file)
-            if not match_startup_config_file:
-                raise Exception('EricssonConfigurationOperations', 'no startup/boot configuration found')
-            startup_config = match_startup_config_file.group()
-            command = 'copy {0} {1}'.format(startup_config, destination_file)
+            # startup_config_file = self.cli.send_command('show configuration | include boot')
+            # match_startup_config_file = re.search('\w+\.\w+', startup_config_file)
+            # if not match_startup_config_file:
+            #     raise Exception('EricssonConfigurationOperations', 'no startup/boot configuration found')
+            # startup_config = match_startup_config_file.group()
+            # command = 'copy {0} {1}'.format(startup_config, destination_file)
+            raise Exception('EricssonConfigurationOperations',
+                            'There is no startup configuration for {0}'.format(self.resource_name))
         else:
             command = 'save configuration {0}'.format(destination_file)
         output = self.cli.send_command(command, expected_map=expected_map)
@@ -143,7 +153,8 @@ class EricssonConfigurationOperations(ConfigurationOperationsInterface):
             return '{0},'.format(destination_filename)
         else:
             self.logger.info('Save configuration failed with errors: {0}'.format(is_downloaded[1]))
-            raise Exception('EricssonConfigurationOperations', 'Save configuration failed with errors:', is_downloaded[1])
+            raise Exception('EricssonConfigurationOperations', 'Save configuration failed with errors:',
+                            is_downloaded[1])
 
     def restore_configuration(self, source_file, config_type, restore_method='override', vrf=None):
         """Restore configuration on device from provided configuration file
@@ -161,7 +172,7 @@ class EricssonConfigurationOperations(ConfigurationOperationsInterface):
 
         if source_file.startswith('ftp'):
             password = ''
-            password_match = re.search('(?<=:)\S+?(?=\@)', source_file.replace('ftp:',''), re.IGNORECASE)
+            password_match = re.search('(?<=:)\S+?(?=\@)', source_file.replace('ftp:', ''), re.IGNORECASE)
             if password_match:
                 password = password_match.group()
                 source_file = source_file.replace(':{0}'.format(password), '')
@@ -178,8 +189,11 @@ class EricssonConfigurationOperations(ConfigurationOperationsInterface):
 
         expected_map['overwrite'] = lambda session: session.send_line('y')
         if 'startup' in destination_filename:
-            output = self.cli.send_command('copy {0} {1}'.format(source_file, 'startup-config.cfg'), expected_map=expected_map)
-            output += self.cli.send_config_command('boot configuration startup-config.cfg', expected_map=expected_map)
+            # output = self.cli.send_command('copy {0} {1}'.format(source_file, 'startup-config.cfg'),
+            #                                expected_map=expected_map)
+            # output += self.cli.send_config_command('boot configuration startup-config.cfg', expected_map=expected_map)
+            raise Exception('EricssonConfigurationOperations',
+                            'There is no startup configuration for {0}'.format(self.resource_name))
         else:
             output = self.cli.send_command('configure {0}'.format(source_file), expected_map=expected_map)
 
