@@ -9,7 +9,7 @@ from cloudshell.networking.networking_utils import UrlParser
 class TestEricssonConfigurationOperations(TestCase):
     def _get_handler(self):
         self.cli = MagicMock()
-        self.cli.send_command = MagicMock(side_effect='226 Transfer complete')
+        self.cli.send_command = MagicMock(return_value='226 Transfer complete')
         self.api = MagicMock()
         self.logger = MagicMock()
         return EricssonConfigurationOperations(cli=self.cli, logger=self.logger, api=self.api,
