@@ -4,9 +4,7 @@ from cloudshell.configuration.cloudshell_cli_binding_keys import CLI_SERVICE
 from cloudshell.configuration.cloudshell_shell_core_binding_keys import LOGGER, API
 import inject
 import re
-from cloudshell.networking.networking_utils import validateIP
-from cloudshell.networking.operations.interfaces.configuration_operations_interface import \
-    ConfigurationOperationsInterface
+from cloudshell.networking.operations.configuration_operations import ConfigurationOperations
 from cloudshell.shell.core.context_utils import get_resource_name
 
 
@@ -14,15 +12,21 @@ def _get_time_stamp():
     return time.strftime("%d%m%y-%H%M%S", time.localtime())
 
 
-class EricssonConfigurationOperations(ConfigurationOperationsInterface):
+class EricssonConfigurationOperations(ConfigurationOperations):
     def __init__(self, cli=None, logger=None, api=None, resource_name=None):
         self._logger = logger
         self._api = api
         self._cli = cli
-        try:
-            self.resource_name = resource_name or get_resource_name()
-        except Exception:
-            raise Exception('EricssonConfigurationOperations', 'ResourceName is empty or None')
+        self._resource_name = resource_name
+
+    @property
+    def resource_name(self):
+        if not self._resource_name:
+            try:
+                self._resource_name = get_resource_name()
+            except Exception:
+                raise Exception('ConfigurationOperations', 'ResourceName is empty or None')
+        return self._resource_name
 
     @property
     def logger(self):
@@ -66,22 +70,7 @@ class EricssonConfigurationOperations(ConfigurationOperationsInterface):
 
         return is_success, message
 
-    def _get_resource_attribute(self, resource_name, attribute_name):
-        """Get resource attribute by provided attribute_name
-
-        :param resource_name: resource name or full name
-        :param attribute_name: name of the attribute
-        :return: attribute value
-        :rtype: string
-        """
-
-        try:
-            result = self.api.GetAttributeValue(resource_name, attribute_name).Value
-        except Exception as e:
-            raise Exception(e.message)
-        return result
-
-    def save_configuration(self, destination_host, source_filename, vrf=None):
+    def save(self, folder_path, configuration_type='Running', vrf_management_name=None):
         """Backup 'startup-config' or 'running-config' from device to provided file_system [ftp|tftp]
         Also possible to backup config to localhost
         :param destination_host:  tftp/ftp server where file be saved
@@ -90,52 +79,50 @@ class EricssonConfigurationOperations(ConfigurationOperationsInterface):
         """
 
         expected_map = {}
-        if not destination_host:
-            destination_host = self._get_resource_attribute(self.resource_name, 'Backup Location')
+        if not folder_path:
+            folder_path = self._get_resource_attribute(self.resource_name, 'Backup Location')
 
-        if not destination_host:
+        if not folder_path:
             raise Exception('EricssonConfigurationOperations', 'Folder Path parameter and Backup Location attribute ' +
                             'are empty!')
 
-        if destination_host.startswith('ftp'):
+        if folder_path.startswith('ftp'):
             password = ''
-            password_match = re.search('(?<=:)\S+?(?=\@)', destination_host.replace('ftp:', ''), re.IGNORECASE)
+            password_match = re.search('(?<=:)\S+?(?=\@)', folder_path.replace('ftp:', ''), re.IGNORECASE)
             if password_match:
                 password = password_match.group()
-                destination_host = destination_host.replace(':{0}'.format(password), '')
+                folder_path = folder_path.replace(':{0}'.format(password), '')
             expected_map[r'[Pp]assword\s*:'] = lambda session: session.send_line(password)
 
-        if source_filename == 'startup' or source_filename == 'running':
-            source_filename += '-config'
-        if source_filename == '':
-            source_filename = 'configuration'
-        if 'config' not in source_filename:
-            raise Exception('EricssonConfigurationOperations', "Source filename must be 'running-config or" +
-                            " startup-config'!")
+        if configuration_type == '':
+            configuration_type = 'running'
+        if not re.search('startup|running', configuration_type, re.IGNORECASE):
+            raise Exception('EricssonConfigurationOperations', "Source filename must be 'Running' or" +
+                            " 'Startup'!")
 
-        if destination_host == '':
-            raise Exception('EricssonConfigurationOperations', "Destination host can\'t be empty.")
+        if folder_path == '':
+            raise Exception('EricssonConfigurationOperations', "Destination host can't be empty.")
 
         system_name = re.sub('\s+', '_', self.resource_name)
         if len(system_name) > 23:
             system_name = system_name[:23]
 
-        destination_filename = '{0}-{1}-{2}'.format(system_name, source_filename, _get_time_stamp())
+        destination_filename = '{0}-{1}-{2}'.format(system_name, configuration_type.lower(), _get_time_stamp())
 
         self.logger.info('destination filename is {0}'.format(destination_filename))
 
-        if len(destination_host) <= 0:
+        if len(folder_path) <= 0:
             destination_host = self._get_resource_attribute(self.resource_name, 'Backup Location')
             if len(destination_host) <= 0:
                 raise Exception('Folder path and Backup Location are empty.')
 
-        if destination_host.endswith('/'):
-            destination_file = destination_host + destination_filename
+        if folder_path.endswith('/'):
+            destination_file = folder_path + destination_filename
         else:
-            destination_file = destination_host + '/' + destination_filename
+            destination_file = folder_path + '/' + destination_filename
 
         expected_map['overwrite'] = lambda session: session.send_line('y')
-        if 'startup' in source_filename.lower():
+        if 'startup' in configuration_type.lower():
             # startup_config_file = self.cli.send_command('show configuration | include boot')
             # match_startup_config_file = re.search('\w+\.\w+', startup_config_file)
             # if not match_startup_config_file:
@@ -156,7 +143,7 @@ class EricssonConfigurationOperations(ConfigurationOperationsInterface):
             raise Exception('EricssonConfigurationOperations', 'Save configuration failed with errors:',
                             is_downloaded[1])
 
-    def restore_configuration(self, source_file, config_type, restore_method='override', vrf=None):
+    def restore(self, path, configuration_type, restore_method='override', vrf_management_name=None):
         """Restore configuration on device from provided configuration file
         Restore configuration from local file system or ftp/tftp server into 'running-config' or 'startup-config'.
         :param source_file: relative path to the file on the remote host tftp://server/sourcefile
@@ -170,21 +157,21 @@ class EricssonConfigurationOperations(ConfigurationOperationsInterface):
             raise Exception('EricssonConfigurationOperations',
                             "Restore method '{}' is wrong! Use 'Append' or 'Override'".format(restore_method))
 
-        if source_file.startswith('ftp'):
-            password = ''
-            password_match = re.search('(?<=:)\S+?(?=\@)', source_file.replace('ftp:', ''), re.IGNORECASE)
-            if password_match:
-                password = password_match.group()
-                source_file = source_file.replace(':{0}'.format(password), '')
-            expected_map[r'[Pp]assword\s*:'] = lambda session: session.send_line(password)
-
-        self.logger.info('Restore device configuration from {}'.format(source_file))
-
-        match_data = re.search('startup|running?', config_type)
+        match_data = re.search('startup|running', configuration_type)
         if not match_data:
-            msg = "Configuration type '{}' is wrong, use 'startup-config' or 'running-config'.".format(config_type)
+            msg = "Configuration type '{}' is wrong, use 'startup' or 'running'.".format(
+                configuration_type)
             raise Exception('EricssonConfigurationOperations', msg)
 
+        if path.startswith('ftp'):
+            password = ''
+            password_match = re.search('(?<=:)\S+?(?=\@)', path.replace('ftp:', ''), re.IGNORECASE)
+            if password_match:
+                password = password_match.group()
+                path = path.replace(':{0}'.format(password), '')
+            expected_map[r'[Pp]assword\s*:'] = lambda session: session.send_line(password)
+
+        self.logger.info('Start restore of device configuration from {}'.format(path))
         destination_filename = match_data.group()
 
         expected_map['overwrite'] = lambda session: session.send_line('y')
@@ -195,7 +182,7 @@ class EricssonConfigurationOperations(ConfigurationOperationsInterface):
             raise Exception('EricssonConfigurationOperations',
                             'There is no startup configuration for {0}'.format(self.resource_name))
         else:
-            output = self.cli.send_command('configure {0}'.format(source_file), expected_map=expected_map)
+            output = self.cli.send_command('configure {0}'.format(path), expected_map=expected_map)
 
         is_downloaded = self._check_download_from_tftp(output)
         if is_downloaded[0] is True:

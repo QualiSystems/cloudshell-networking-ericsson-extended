@@ -4,10 +4,16 @@ from collections import OrderedDict
 import inject
 import time
 
-from cloudshell.configuration.cloudshell_cli_binding_keys import CLI_SERVICE
+from cloudshell.configuration.cloudshell_cli_binding_keys import CLI_SERVICE, CONNECTION_MANAGER
 from cloudshell.configuration.cloudshell_shell_core_binding_keys import API, LOGGER
+from cloudshell.networking.networking_utils import UrlParser
 from cloudshell.networking.operations.interfaces.firmware_operations_interface import FirmwareOperationsInterface
 from cloudshell.shell.core.context_utils import get_resource_name
+
+
+def rerun_image_loading(session, command):
+    session.hardware_expect('n')
+    session.send_line(command)
 
 
 class EricssonFirmwareOperations(FirmwareOperationsInterface):
@@ -42,11 +48,7 @@ class EricssonFirmwareOperations(FirmwareOperationsInterface):
             self._cli = inject.instance(CLI_SERVICE)
         return self._cli
 
-    def rerun_image_loading(self, session, command):
-        session.hardware_expect('n')
-        session.send_line(command)
-
-    def update_firmware(self, remote_host, file_path, size_of_firmware=2000000):
+    def load_firmware(self, path, vrf_management_name=None):
         """Update firmware version on device by loading provided image, performs following steps:
 
         1. Copy bin file from remote tftp server.
@@ -60,22 +62,28 @@ class EricssonFirmwareOperations(FirmwareOperationsInterface):
         :return: status / exception
         """
 
+        url = UrlParser.parse_url(path)
+        if not url \
+                or UrlParser.FILENAME not in url \
+                or not url[UrlParser.FILENAME] \
+                or UrlParser.HOSTNAME not in url \
+                or not url[UrlParser.HOSTNAME] \
+                or UrlParser.SCHEME not in url \
+                or not url[UrlParser.SCHEME]:
+            raise Exception('EricssonFirmwareOperations', 'Path is wrong or empty')
         image_version = ''
-        image_version_match = re.search(r'(?=\d)\S+(?=.tar)', file_path, re.IGNORECASE)
+
+        image_version_match = re.search(r'(?=\d)\S+(?=.tar)', url[UrlParser.FILENAME], re.IGNORECASE)
         if image_version_match:
             image_version = image_version_match.group()
-        if remote_host.endswith('/'):
-            full_image_path = remote_host + file_path
-        else:
-            full_image_path = remote_host + '/' + file_path
 
         expected_map = OrderedDict()
         expected_map['download\s+in\s+progress\s+[\[\(][Yy]/[Nn][\)\]]'] = (
-            lambda session: self.rerun_image_loading(session, 'release download {0}'.format(full_image_path)))
+            lambda session: rerun_image_loading(session, 'release download {0}'.format(path)))
         expected_map['[\[\(][Yy]/[Nn][\)\]]'] = lambda session: session.send_line('y')
         expected_map['overwrite'] = lambda session: session.send_line('y')
         
-        output = self.cli.send_command('release download {0}'.format(full_image_path), expected_map=expected_map)
+        output = self.cli.send_command('release download {0}'.format(path), expected_map=expected_map)
         if not re.search('[Ii]nstallation [Cc]ompleted [Ss]uccessfully|Release distribution completed', output,
                          re.IGNORECASE):
             message = ''
@@ -118,6 +126,8 @@ class EricssonFirmwareOperations(FirmwareOperationsInterface):
             if not session_type == 'CONSOLE':
                 self.logger.info('Session type is \'{}\', closing session...'.format(session_type))
                 self.cli.destroy_threaded_session()
+                connection_manager = inject.instance(CONNECTION_MANAGER)
+                connection_manager.decrement_sessions_count()
 
         self.logger.info('Wait 20 seconds for device to reload...')
         time.sleep(20)

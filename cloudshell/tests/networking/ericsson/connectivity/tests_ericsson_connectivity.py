@@ -3,7 +3,7 @@ from mock import MagicMock
 from cloudshell.networking.ericsson.ericsson_connectivity_operations import EricssonConnectivityOperations
 
 
-class TestCiscoHandlerBase(TestCase):
+class TestEricssonConnectivityOperations(TestCase):
     def _get_handler(self):
         self.cli = MagicMock()
         self.api = MagicMock()
