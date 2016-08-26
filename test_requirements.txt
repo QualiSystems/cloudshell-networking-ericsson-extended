@@ -1,24 +1,8 @@
+mock==2.0.0
+nose==1.3.7
 jsonpickle==0.9.3
-ecdsa==0.13
-Inject==3.3.1
-ipcalc==1.1.3
-linecache2==1.0.0
-paramiko==1.15.2
-ply==3.8
-pyasn1==0.1.9
-pycrypto==2.6.1
-pysmi==0.0.6
-pysnmp==4.3.1
-traceback2==1.4.0
-coverage
-unittest2
-mock
-teamcity-messages
-nose
-nose-exclude
+jsonschema==2.5.1
 cloudshell-cli>=2.1, <2.2
 cloudshell-snmp>=2.1, <2.2
 cloudshell-core>=2.1, <2.2
 cloudshell-shell-core>=2.1, <2.2
-cloudshell-networking>=2.1, <2.2
-
