@@ -56,9 +56,8 @@ class EricssonFirmwareOperations(FirmwareOperationsInterface):
         3. Set downloaded bin file as boot file and then reboot device.
         4. Check if firmware was successfully installed.
 
-        :param remote_host: host with firmware
-        :param file_path: relative path on remote host
-        :param size_of_firmware: size in bytes
+        :param path: full path to firmware file on ftp/tftp location
+        :param vrf_management_name: VRF Name
         :return: status / exception
         """
 
