@@ -97,6 +97,31 @@ class TestEricssonConfigurationOperations(TestCase):
         restore = self._get_handler()
         restore.orchestration_restore(saved_artifact_info)
 
+    def test_orchestration_restore_validates_incoming_custom_params(self):
+        saved_artifact_info = """{
+            "saved_artifacts_info" : {
+                "saved_artifact" : {
+                    "artifact_type" : "tftp",
+                    "identifier" : "//10.0.0.1/folder1/resource_name-running-300816-130938"
+                },
+                "resource_name" : "sample_resource_name",
+                "restore_rules" : {
+                    "requires_same_resource" : true
+                },
+                "created_date" : "2016-08-30T13:09:38.411000"
+            }
+        }"""
+        custom_params = """
+        {
+            "custom_params": {
+                "configuration_type" : "Running",
+                "restore_method" : "Override"
+                }
+        }"""
+
+        restore = self._get_handler()
+        restore.orchestration_restore(saved_artifact_info, custom_params)
+
     def test_orchestration_restore_validates_wrong_saved_artifact_info(self):
         saved_artifact_info = """{
         "saved_artifacts_info":

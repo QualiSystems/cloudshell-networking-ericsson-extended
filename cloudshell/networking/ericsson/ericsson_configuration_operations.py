@@ -157,7 +157,7 @@ class EricssonConfigurationOperations(ConfigurationOperations):
             raise Exception('EricssonConfigurationOperations',
                             "Restore method '{}' is wrong! Use 'Append' or 'Override'".format(restore_method))
 
-        match_data = re.search('startup|running', configuration_type)
+        match_data = re.search('startup|running', configuration_type, re.IGNORECASE)
         if not match_data:
             msg = "Configuration type '{}' is wrong, use 'startup' or 'running'.".format(
                 configuration_type)
