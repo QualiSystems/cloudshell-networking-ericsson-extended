@@ -4,8 +4,9 @@ from cloudshell.configuration.cloudshell_cli_binding_keys import CLI_SERVICE
 from cloudshell.configuration.cloudshell_shell_core_binding_keys import LOGGER, API
 import inject
 import re
+from cloudshell.networking.networking_utils import UrlParser
 from cloudshell.networking.operations.configuration_operations import ConfigurationOperations
-from cloudshell.shell.core.context_utils import get_resource_name
+from cloudshell.shell.core.context_utils import get_resource_name, decrypt_password
 
 
 def _get_time_stamp():
@@ -70,38 +71,50 @@ class EricssonConfigurationOperations(ConfigurationOperations):
 
         return is_success, message
 
-    def save(self, folder_path, configuration_type='Running', vrf_management_name=None):
+    def save(self, folder_path=None, configuration_type='running', vrf_management_name=None):
         """Backup 'startup-config' or 'running-config' from device to provided file_system [ftp|tftp]
         Also possible to backup config to localhost
-        :param destination_host:  tftp/ftp server where file be saved
-        :param source_filename: what file to backup
+        :param folder_path:  tftp/ftp server where file be saved
+        :param configuration_type: what file to backup
         :return: status message / exception
         """
 
         expected_map = {}
         if not folder_path:
             folder_path = self._get_resource_attribute(self.resource_name, 'Backup Location')
+            if ':' not in folder_path:
+                scheme = self._get_resource_attribute(self.resource_name, 'Backup Type')
+                folder_path = '{}:\\{}'.format(scheme, folder_path)
 
         if not folder_path:
             raise Exception('EricssonConfigurationOperations', 'Folder Path parameter and Backup Location attribute ' +
                             'are empty!')
 
-        if folder_path.startswith('ftp'):
-            password = ''
-            password_match = re.search('(?<=:)\S+?(?=\@)', folder_path.replace('ftp:', ''), re.IGNORECASE)
-            if password_match:
-                password = password_match.group()
-                folder_path = folder_path.replace(':{0}'.format(password), '')
+        url = UrlParser.parse_url(folder_path)
+        if UrlParser.SCHEME not in url and not url[UrlParser.SCHEME]:
+            url[UrlParser.SCHEME] = self._get_resource_attribute(self.resource_name, 'Backup Type')
+            if not url[UrlParser.SCHEME]:
+                raise Exception('EricssonConfigurationOperations', 'Backup Type attribute is empty!')
+
+        if 'tftp' not in url[UrlParser.SCHEME]:
+            if UrlParser.USERNAME not in url or not url[UrlParser.USERNAME]:
+                url[UrlParser.USERNAME] = self._get_resource_attribute(self.resource_name, 'Backup User')
+            if UrlParser.PASSWORD in url and url[UrlParser.PASSWORD]:
+                password = url[UrlParser.PASSWORD]
+                url[UrlParser.PASSWORD] = ''
+                if UrlParser.NETLOC in url and url[UrlParser.NETLOC]:
+                    url[UrlParser.NETLOC] = url[UrlParser.NETLOC].replace(':{}'.format(password), '')
+            else:
+                password = decrypt_password(self._get_resource_attribute(self.resource_name,
+                                                                         'Backup Password'))
+
             expected_map[r'[Pp]assword\s*:'] = lambda session: session.send_line(password)
 
-        if configuration_type == '':
+        if not configuration_type:
             configuration_type = 'running'
         if not re.search('startup|running', configuration_type, re.IGNORECASE):
             raise Exception('EricssonConfigurationOperations', "Source filename must be 'Running' or" +
                             " 'Startup'!")
-
-        if folder_path == '':
-            raise Exception('EricssonConfigurationOperations', "Destination host can't be empty.")
 
         system_name = re.sub('\s+', '_', self.resource_name)
         if len(system_name) > 23:
@@ -111,15 +124,9 @@ class EricssonConfigurationOperations(ConfigurationOperations):
 
         self.logger.info('destination filename is {0}'.format(destination_filename))
 
-        if len(folder_path) <= 0:
-            destination_host = self._get_resource_attribute(self.resource_name, 'Backup Location')
-            if len(destination_host) <= 0:
-                raise Exception('Folder path and Backup Location are empty.')
+        url[UrlParser.FILENAME] = destination_filename
 
-        if folder_path.endswith('/'):
-            destination_file = folder_path + destination_filename
-        else:
-            destination_file = folder_path + '/' + destination_filename
+        destination_file_path = UrlParser.build_url(**url)
 
         expected_map['overwrite'] = lambda session: session.send_line('y')
         if 'startup' in configuration_type.lower():
@@ -132,7 +139,7 @@ class EricssonConfigurationOperations(ConfigurationOperations):
             raise Exception('EricssonConfigurationOperations',
                             'There is no startup configuration for {0}'.format(self.resource_name))
         else:
-            command = 'save configuration {0}'.format(destination_file)
+            command = 'save configuration {0}'.format(destination_file_path)
         output = self.cli.send_command(command, expected_map=expected_map)
         is_downloaded = self._check_download_from_tftp(output)
         if is_downloaded[0]:

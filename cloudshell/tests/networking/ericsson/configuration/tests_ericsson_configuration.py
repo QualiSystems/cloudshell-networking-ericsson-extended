@@ -53,6 +53,18 @@ class TestEricssonConfigurationOperations(TestCase):
         print json_string
         validate(jsonpickle.loads(json_string), schema=get_schema())
 
+    def test_orchestration_save_should_save_to_simple_ftp_path(self):
+        request = """
+        {
+            "custom_params": {
+                "folder_path" : "ftp://ftpuser:ftppass@10.0.0.1/"
+                }
+        }"""
+        handler = self._get_handler()
+        json_string = handler.orchestration_save(custom_params=request)
+        print json_string
+        validate(jsonpickle.loads(json_string), schema=get_schema())
+
     def test_orchestration_save_should_fail_no_folder_path(self):
         request = """
         {
