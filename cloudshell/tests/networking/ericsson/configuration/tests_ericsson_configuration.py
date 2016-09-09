@@ -106,6 +106,20 @@ class TestEricssonConfigurationOperations(TestCase):
         print json_string
         validate(jsonpickle.loads(json_string), schema=get_schema())
 
+    def test_orchestration_save_get_invalid_folder_path(self):
+        request = """
+        {
+            "custom_params": {
+                "configuration_type" : "Running",
+                "folder_path" : "tftp://10.0.0.1///folder1//folder 2//folder 5",
+                "vrf_management_name": "network-1"
+                }
+        }"""
+        handler = self._get_handler()
+        json_string = handler.orchestration_save(custom_params=request)
+        print json_string
+        validate(jsonpickle.loads(json_string), schema=get_schema())
+
     def test_orchestration_restore_validates_incoming_saved_artifact_info(self):
         saved_artifact_info = """{
             "saved_artifacts_info" : {
