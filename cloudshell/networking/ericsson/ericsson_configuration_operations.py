@@ -79,36 +79,14 @@ class EricssonConfigurationOperations(ConfigurationOperations):
         :return: status message / exception
         """
 
-        expected_map = {}
-        if not folder_path:
-            folder_path = self._get_resource_attribute(self.resource_name, 'Backup Location')
-            if ':' not in folder_path:
-                scheme = self._get_resource_attribute(self.resource_name, 'Backup Type')
-                folder_path = '{}:\\{}'.format(scheme, folder_path)
+        expected_map = dict()
 
-        if not folder_path:
-            raise Exception('EricssonConfigurationOperations', 'Folder Path parameter and Backup Location attribute ' +
-                            'are empty!')
-
-        url = UrlParser.parse_url(folder_path)
-        if UrlParser.SCHEME not in url and not url[UrlParser.SCHEME]:
-            url[UrlParser.SCHEME] = self._get_resource_attribute(self.resource_name, 'Backup Type')
-            if not url[UrlParser.SCHEME]:
-                raise Exception('EricssonConfigurationOperations', 'Backup Type attribute is empty!')
-
-        if 'tftp' not in url[UrlParser.SCHEME]:
-            if UrlParser.USERNAME not in url or not url[UrlParser.USERNAME]:
-                url[UrlParser.USERNAME] = self._get_resource_attribute(self.resource_name, 'Backup User')
-            if UrlParser.PASSWORD in url and url[UrlParser.PASSWORD]:
-                password = url[UrlParser.PASSWORD]
-                url[UrlParser.PASSWORD] = ''
-                if UrlParser.NETLOC in url and url[UrlParser.NETLOC]:
-                    url[UrlParser.NETLOC] = url[UrlParser.NETLOC].replace(':{}'.format(password), '')
-            else:
-                password = decrypt_password(self._get_resource_attribute(self.resource_name,
-                                                                         'Backup Password'))
-
-            expected_map[r'[Pp]assword\s*:'] = lambda session: session.send_line(password)
+        full_path = self.get_path(folder_path)
+        url = UrlParser.parse_url(full_path)
+        password = url.get(UrlParser.PASSWORD)
+        if password:
+            expected_map = {r'[Pp]assword\s*:': lambda session: session.send_line(password)}
+            full_path.replace(':{}'.format(password), '')
 
         if not configuration_type:
             configuration_type = 'running'
@@ -126,7 +104,7 @@ class EricssonConfigurationOperations(ConfigurationOperations):
 
         url[UrlParser.FILENAME] = destination_filename
 
-        destination_file_path = UrlParser.build_url(**url)
+        destination_file_path = UrlParser.build_url(url)
 
         expected_map['overwrite'] = lambda session: session.send_line('y')
         if 'startup' in configuration_type.lower():
@@ -144,7 +122,7 @@ class EricssonConfigurationOperations(ConfigurationOperations):
         is_downloaded = self._check_download_from_tftp(output)
         if is_downloaded[0]:
             self.logger.info('Save configuration completed.')
-            return '{0},'.format(destination_filename)
+            return destination_filename
         else:
             self.logger.info('Save configuration failed with errors: {0}'.format(is_downloaded[1]))
             raise Exception('EricssonConfigurationOperations', 'Save configuration failed with errors:',
@@ -153,7 +131,7 @@ class EricssonConfigurationOperations(ConfigurationOperations):
     def restore(self, path, configuration_type, restore_method='override', vrf_management_name=None):
         """Restore configuration on device from provided configuration file
         Restore configuration from local file system or ftp/tftp server into 'running-config' or 'startup-config'.
-        :param source_file: relative path to the file on the remote host tftp://server/sourcefile
+        :param configuration_type: relative path to the file on the remote host tftp://server/sourcefile
         :param restore_method: override current config or not
         :return:
         """

@@ -16,6 +16,11 @@ class TestEricssonConfigurationOperations(TestCase):
                                                   resource_name='sample_resource_name')
         return handler
 
+    def test_save_validates_parameters(self):
+        handler = self._get_handler()
+        result = handler.save('tftp://10.10.10.10/Folder')
+        self.assertIsNotNone(result)
+
     def test_orchestration_save_should_fail_startup_config(self):
         request = """
         {
@@ -71,6 +76,16 @@ class TestEricssonConfigurationOperations(TestCase):
             "custom_params": {
                 "configuration_type" : "Running",
                 "vrf_management_name": "network-1"
+                }
+        }"""
+
+        handler = self._get_handler()
+        self.assertRaises(Exception, handler.orchestration_save, custom_params=request)
+
+    def test_orchestration_save_should_not_fail(self):
+        request = """
+        {
+            "custom_params": {
                 }
         }"""
 
@@ -158,6 +173,11 @@ class TestEricssonConfigurationOperations(TestCase):
         result = UrlParser.parse_url(url)
         self.assertIsNotNone(result)
 
+    def test_url_parser_host_only(self):
+        url = '10.10.10.10'
+        result = UrlParser.parse_url(url)
+        self.assertIsNotNone(result)
+
     def test_url_join(self):
         correct_url = 'ftp://user:pwd@google.com/folder1/file2'
         url = '/folder1/file2'
@@ -166,7 +186,7 @@ class TestEricssonConfigurationOperations(TestCase):
         parsed_url[UrlParser.SCHEME] = 'ftp'
         parsed_url[UrlParser.USERNAME] = 'user'
         parsed_url[UrlParser.PASSWORD] = 'pwd'
-        result = UrlParser.build_url(**parsed_url)
+        result = UrlParser.build_url(parsed_url)
         self.assertIsNotNone(result)
         self.assertEqual(correct_url, result)
 
