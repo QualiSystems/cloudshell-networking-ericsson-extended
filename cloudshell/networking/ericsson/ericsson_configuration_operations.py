@@ -86,7 +86,8 @@ class EricssonConfigurationOperations(ConfigurationOperations):
         password = url.get(UrlParser.PASSWORD)
         if password:
             expected_map = {r'[Pp]assword\s*:': lambda session: session.send_line(password)}
-            full_path.replace(':{}'.format(password), '')
+            url.pop(UrlParser.PASSWORD)
+            url[UrlParser.NETLOC] = url[UrlParser.NETLOC].replace(':{}'.format(password), '')
 
         if not configuration_type:
             configuration_type = 'running'

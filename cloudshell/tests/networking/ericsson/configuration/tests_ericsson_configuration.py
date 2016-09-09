@@ -82,7 +82,7 @@ class TestEricssonConfigurationOperations(TestCase):
         handler = self._get_handler()
         self.assertRaises(Exception, handler.orchestration_save, custom_params=request)
 
-    def test_orchestration_save_should_not_fail(self):
+    def test_orchestration_save_should_fail(self):
         request = """
         {
             "custom_params": {
@@ -91,6 +91,18 @@ class TestEricssonConfigurationOperations(TestCase):
 
         handler = self._get_handler()
         self.assertRaises(Exception, handler.orchestration_save, custom_params=request)
+
+    def test_orchestration_save_should_not_fail(self):
+        request = """
+        {
+            "custom_params": {
+                "folder_path" : "flash:/some_folder"
+                }
+        }"""
+
+        handler = self._get_handler()
+        result = handler.orchestration_save(custom_params=request)
+        self.assertIsNotNone(result)
 
     def test_orchestration_save_should_return_valid_response(self):
         request = """
