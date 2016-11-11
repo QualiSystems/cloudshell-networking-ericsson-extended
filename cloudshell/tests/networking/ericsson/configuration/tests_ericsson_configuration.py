@@ -7,9 +7,11 @@ from cloudshell.networking.networking_utils import UrlParser
 
 
 class TestEricssonConfigurationOperations(TestCase):
-    def _get_handler(self):
+    def _get_handler(self, output=None):
+        if not output:
+            output = '226 Transfer complete'
         self.cli = mock.MagicMock()
-        self.cli.send_command = mock.MagicMock(return_value='226 Transfer complete')
+        self.cli.send_command = mock.MagicMock(return_value=output)
         self.api = mock.MagicMock()
         self.logger = mock.MagicMock()
         handler = EricssonConfigurationOperations(cli=self.cli, logger=self.logger, api=self.api,
@@ -21,7 +23,7 @@ class TestEricssonConfigurationOperations(TestCase):
         result = handler.save('tftp://10.10.10.10/Folder')
         self.assertIsNotNone(result)
 
-    def test_orchestration_save_should_fail_startup_config(self):
+    def test_orchestration_save_should_save_startup_config(self):
         request = """
         {
             "custom_params": {
@@ -31,7 +33,9 @@ class TestEricssonConfigurationOperations(TestCase):
                 }
         }"""
         handler = self._get_handler()
-        self.assertRaises(Exception, handler.orchestration_save, custom_params=request)
+        json_string = handler.orchestration_save(custom_params=request)
+        print json_string
+        validate(jsonpickle.loads(json_string), schema=get_schema())
 
     def test_orchestration_save_should_save_default_config(self):
         request = """
@@ -174,6 +178,22 @@ class TestEricssonConfigurationOperations(TestCase):
 
         restore = self._get_handler()
         restore.orchestration_restore(saved_artifact_info, custom_params)
+
+    def test_save_can_save_to_scp(self):
+        output = """[local]osreg17-ssr1#$me/cloudshell/ssr8020-15589-running-011116-163021
+        Saving config to scp: //arts02@147.117.49.115//home/cloudshell/ssr8020-15589-running-011116-163021...
+        The authenticity of host '147.117.49.115 (147.117.49.115)' can't be established.
+        RSA key fingerprint is 6e:a6:36:96:ac:0a:8b:c7:2c:60:fd:ec:1c:e4:4b:ee.
+        Are you sure you want to continue connecting (yes/no)? y
+        Please type 'yes' or 'no': yes
+        Warning: Permanently added '147.117.49.115' (RSA) to the list of known hosts.
+        Enter Windows password:
+        running_config_27172                          100% 2095     2.1KB/s   00:00
+        [local]osreg17-ssr1#$$me/cloudshell/ssr8020-15589-running-011116-163021"""
+        handler = self._get_handler(output)
+        result = handler.save('//arts02:passw@147.117.49.115//home/cloudshell/ssr8020-15589-running-011116-163021')
+        self.assertIsNotNone(result)
+        self.assertTrue('running' in result)
 
     def test_orchestration_restore_validates_wrong_saved_artifact_info(self):
         saved_artifact_info = """{
