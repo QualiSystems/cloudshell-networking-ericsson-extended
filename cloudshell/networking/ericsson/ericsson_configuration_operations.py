@@ -83,12 +83,14 @@ class EricssonConfigurationOperations(ConfigurationOperations):
         """
 
         expected_map = dict()
-        if folder_path.startswith('//'):
-            folder_path = 'scp:' + folder_path
-
         full_path = self.get_path(folder_path)
 
         url = UrlParser.parse_url(full_path)
+        scheme = url.get(UrlParser.SCHEME, None)
+        if scheme and 'scp' in scheme.lower():
+            url[UrlParser.NETLOC] += '/'
+            url[UrlParser.HOSTNAME] += '/'
+
         password = url.get(UrlParser.PASSWORD)
         if password:
             expected_map = {r'[Pp]assword\s*:': lambda session: session.send_line(password)}
@@ -112,9 +114,6 @@ class EricssonConfigurationOperations(ConfigurationOperations):
         url[UrlParser.FILENAME] = destination_filename
 
         destination_file_path = UrlParser.build_url(url)
-
-        if destination_file_path.startswith('scp:'):
-            destination_file_path = destination_file_path.replace('scp:', '')
 
         expected_map['overwrite'] = lambda session: session.send_line('y')
         expected_map['continue connecting'] = lambda session: session.send_line('yes')

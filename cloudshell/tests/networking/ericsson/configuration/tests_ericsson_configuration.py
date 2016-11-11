@@ -191,7 +191,7 @@ class TestEricssonConfigurationOperations(TestCase):
         running_config_27172                          100% 2095     2.1KB/s   00:00
         [local]osreg17-ssr1#$$me/cloudshell/ssr8020-15589-running-011116-163021"""
         handler = self._get_handler(output)
-        result = handler.save('//arts02:passw@147.117.49.115//home/cloudshell/ssr8020-15589-running-011116-163021')
+        result = handler.save('scp://arts02:passw@147.117.49.115//home/cloudshell/ssr8020-15589-running-011116-163021')
         self.assertIsNotNone(result)
         self.assertTrue('running' in result)
 
