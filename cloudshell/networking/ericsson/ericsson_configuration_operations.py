@@ -90,12 +90,12 @@ class EricssonConfigurationOperations(ConfigurationOperations):
         if scheme and 'scp' in scheme.lower():
             url[UrlParser.NETLOC] += '/'
             url[UrlParser.HOSTNAME] += '/'
-
-        password = url.get(UrlParser.PASSWORD)
-        if password:
-            expected_map = {r'[Pp]assword\s*:': lambda session: session.send_line(password)}
-            url.pop(UrlParser.PASSWORD)
-            url[UrlParser.NETLOC] = url[UrlParser.NETLOC].replace(':{}'.format(password), '')
+        elif scheme and 'ftp' in scheme.lower():
+            password = url.get(UrlParser.PASSWORD)
+            if password:
+                expected_map = {r'[Pp]assword\s*:': lambda session: session.send_line(password)}
+                url.pop(UrlParser.PASSWORD)
+                url[UrlParser.NETLOC] = url[UrlParser.NETLOC].replace(':{}'.format(password), '')
 
         if not configuration_type:
             configuration_type = 'running'
@@ -134,8 +134,8 @@ class EricssonConfigurationOperations(ConfigurationOperations):
         :return:
         """
 
-        expected_map = {}
-
+        expected_map = {'overwrite': lambda session: session.send_line('y'),
+                        'continue connecting': lambda session: session.send_line('yes')}
         if not re.search('append|override', restore_method.lower()):
             raise Exception('EricssonConfigurationOperations',
                             "Restore method '{}' is wrong! Use 'Append' or 'Override'".format(restore_method))
@@ -157,7 +157,8 @@ class EricssonConfigurationOperations(ConfigurationOperations):
             if 'override' in restore_method.lower():
                 self._configuration_override(path, expected_map)
             else:
-                self.cli.send_command('configure {0}'.format(path), expected_map=expected_map)
+                output = self._configure(path, expected_map=expected_map)
+                self._check_download_from_tftp(output, 'configure')
         self.cli.commit()
         return 'Restore configuration completed.'
 
@@ -177,8 +178,7 @@ class EricssonConfigurationOperations(ConfigurationOperations):
                                         expected_map=expected_map)
         startup_override_output = self.copy('admin.cfg', 'ericsson.cfg', expected_map)
         self._check_download_from_tftp(startup_override_output)
-
-        return self._configure('/flash/admin.cfg')
+        self._configure('/flash/admin.cfg')
 
     def _configuration_override(self, path, expected_map=None):
         """Configuration override
@@ -199,8 +199,7 @@ class EricssonConfigurationOperations(ConfigurationOperations):
         :return:
         """
 
-        output = self.cli.send_command('configure {0}'.format(path), expected_map=expected_map)
-        self._check_download_from_tftp(output, 'configure')
+        return self.cli.send_command('configure {0}'.format(path), expected_map=expected_map)
 
     def copy(self, source, destination, expected_map=None, no_confirm=True):
         """Copy file from source to destination
