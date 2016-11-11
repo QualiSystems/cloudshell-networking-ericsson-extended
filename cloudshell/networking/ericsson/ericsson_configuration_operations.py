@@ -96,6 +96,8 @@ class EricssonConfigurationOperations(ConfigurationOperations):
                 expected_map = {r'[Pp]assword\s*:': lambda session: session.send_line(password)}
                 url.pop(UrlParser.PASSWORD)
                 url[UrlParser.NETLOC] = url[UrlParser.NETLOC].replace(':{}'.format(password), '')
+                url[UrlParser.NETLOC] += '/'
+                url[UrlParser.HOSTNAME] += '/'
 
         if not configuration_type:
             configuration_type = 'running'
@@ -176,8 +178,7 @@ class EricssonConfigurationOperations(ConfigurationOperations):
         copied_file_name = path.split('/')[-1]
         output += self.cli.send_command('rename {0} admin.cfg -noconfirm'.format(copied_file_name),
                                         expected_map=expected_map)
-        startup_override_output = self.copy('admin.cfg', 'ericsson.cfg', expected_map)
-        self._check_download_from_tftp(startup_override_output)
+        self.copy('admin.cfg', 'ericsson.cfg', expected_map)
         self._configure('/flash/admin.cfg')
 
     def _configuration_override(self, path, expected_map=None):
