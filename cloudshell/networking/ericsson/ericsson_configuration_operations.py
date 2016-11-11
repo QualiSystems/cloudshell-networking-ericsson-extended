@@ -117,6 +117,7 @@ class EricssonConfigurationOperations(ConfigurationOperations):
             destination_file_path = destination_file_path.replace('scp:', '')
 
         expected_map['overwrite'] = lambda session: session.send_line('y')
+        expected_map['continue connecting'] = lambda session: session.send_line('yes')
         if 'startup' in configuration_type.lower():
             output = self.copy('ericsson.cfg', destination_file_path)
         else:
