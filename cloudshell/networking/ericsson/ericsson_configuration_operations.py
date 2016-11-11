@@ -88,9 +88,6 @@ class EricssonConfigurationOperations(ConfigurationOperations):
 
         full_path = self.get_path(folder_path)
 
-        if full_path.startswith('scp:'):
-            full_path = full_path.replace('scp:', '')
-
         url = UrlParser.parse_url(full_path)
         password = url.get(UrlParser.PASSWORD)
         if password:
@@ -115,6 +112,9 @@ class EricssonConfigurationOperations(ConfigurationOperations):
         url[UrlParser.FILENAME] = destination_filename
 
         destination_file_path = UrlParser.build_url(url)
+
+        if destination_file_path.startswith('scp:'):
+            destination_file_path = destination_file_path.replace('scp:', '')
 
         expected_map['overwrite'] = lambda session: session.send_line('y')
         if 'startup' in configuration_type.lower():
