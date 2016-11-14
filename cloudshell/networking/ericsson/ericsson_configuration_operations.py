@@ -236,7 +236,9 @@ class EricssonConfigurationOperations(ConfigurationOperations):
             self.cli.send_command(command='reload', expected_map=expected_map, timeout=3, retries=15,
                                   command_retries=1)
 
-        except Exception as e:
+        except Exception:
+            pass
+        finally:
             session_type = self.cli.get_session_type()
 
             if not session_type == 'CONSOLE':
