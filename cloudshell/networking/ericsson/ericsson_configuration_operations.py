@@ -87,13 +87,18 @@ class EricssonConfigurationOperations(ConfigurationOperations):
 
         url = UrlParser.parse_url(full_path)
         scheme = url.get(UrlParser.SCHEME, None)
+
+        password = url.get(UrlParser.PASSWORD)
+        if password:
+            expected_map = {r'[Pp]assword\s*:': lambda session: session.send_line(password)}
+            self.logger.info('password added to expect_map')
+
         if scheme and 'scp' in scheme.lower():
             url[UrlParser.NETLOC] += '/'
             url[UrlParser.HOSTNAME] += '/'
+
         elif scheme and 'ftp' in scheme.lower():
-            password = url.get(UrlParser.PASSWORD)
             if password:
-                expected_map = {r'[Pp]assword\s*:': lambda session: session.send_line(password)}
                 url.pop(UrlParser.PASSWORD)
                 url[UrlParser.NETLOC] = url[UrlParser.NETLOC].replace(':{}'.format(password), '')
                 url[UrlParser.NETLOC] += '/'
@@ -138,6 +143,11 @@ class EricssonConfigurationOperations(ConfigurationOperations):
 
         expected_map = {'overwrite': lambda session: session.send_line('y'),
                         'continue connecting': lambda session: session.send_line('yes')}
+        url = UrlParser.parse_url(path)
+        password = url.get(UrlParser.PASSWORD, None)
+        if password:
+            expected_map = {r'[Pp]assword\s*:': lambda session: session.send_line(password)}
+
         if not re.search('append|override', restore_method.lower()):
             raise Exception('EricssonConfigurationOperations',
                             "Restore method '{}' is wrong! Use 'Append' or 'Override'".format(restore_method))
@@ -153,7 +163,7 @@ class EricssonConfigurationOperations(ConfigurationOperations):
         if 'startup' in destination_filename:
             if 'append' in restore_method.lower():
                 raise Exception('EricssonConfigurationOperations',
-                                'There is no startup configuration for {0}'.format(self.resource_name))
+                                'There is no append mode for startup configuration')
             self._override_startup_config(path, expected_map)
         else:
             if 'override' in restore_method.lower():
@@ -232,15 +242,15 @@ class EricssonConfigurationOperations(ConfigurationOperations):
         expected_map['[\[\(][Yy]/[Nn][\)\]]'] = lambda session: session.send_line('y')
 
         try:
-            self.logger.info('Start installation of the new image:')
+            self.logger.info('Start reloading the device:')
             self.cli.send_command(command='reload', expected_map=expected_map, timeout=3, retries=15,
                                   command_retries=1)
 
         except Exception:
             pass
+
         finally:
             session_type = self.cli.get_session_type()
-
             if not session_type == 'CONSOLE':
                 self.logger.info('Session type is \'{}\', closing session...'.format(session_type))
                 self.cli.destroy_threaded_session()

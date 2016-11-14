@@ -152,6 +152,7 @@ class TestEricssonConfigurationOperations(TestCase):
         }"""
 
         restore = self._get_handler()
+        restore.reload = mock.MagicMock(return_value=True)
         restore.orchestration_restore(saved_artifact_info)
 
     def test_orchestration_restore_validates_incoming_custom_params(self):
@@ -177,6 +178,7 @@ class TestEricssonConfigurationOperations(TestCase):
         }"""
 
         restore = self._get_handler()
+        restore.reload = mock.MagicMock(return_value=True)
         restore.orchestration_restore(saved_artifact_info, custom_params)
 
     def test_save_can_save_to_scp(self):
@@ -191,7 +193,7 @@ class TestEricssonConfigurationOperations(TestCase):
         running_config_27172                          100% 2095     2.1KB/s   00:00
         [local]osreg17-ssr1#$$me/cloudshell/ssr8020-15589-running-011116-163021"""
         handler = self._get_handler(output)
-        result = handler.save('scp://arts02:passw@147.117.49.115//home/cloudshell/ssr8020-15589-running-011116-163021')
+        result = handler.save('ftp://arts02:passw@147.117.49.115//home/cloudshell/ssr8020-15589-running-011116-163021')
         self.assertIsNotNone(result)
         self.assertTrue('running' in result)
 
