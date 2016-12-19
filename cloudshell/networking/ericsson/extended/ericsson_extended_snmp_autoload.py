@@ -39,7 +39,7 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
         self.port_exclude_pattern = r'serial|stack|engine|management|mgmt|voice|foreign'
         self.port_ethernet_vendor_type_pattern = ''
         self.vendor_type_exclusion_pattern = ''
-        self.module_details_regexp = r'^(?P<module_model>.*)\s+sn:(?P<serial_number>.*)\s+rev:(?P<version>.*) mfg'
+        self.module_details_regexp = r'^(?P<module_model>.*)\s+[Cc]ard\s+sn:(?P<serial_number>.*)\s+rev:(?P<version>.*) mfg'
         self.load_mib_list = []
         self.resources = list()
         self.attributes = list()
@@ -154,7 +154,6 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
             elif temp_entity_table['entPhysicalClass'] == 'module':
                 self.module_list.append(index)
                 self.pfe_dict[index] = {'pfe_0': dict()}
-                temp_entity_table.update(self._get_module_info(temp_entity_table['entPhysicalDescr']))
                 pfe_configuration = self.configuration.get(temp_entity_table['entPhysicalVendorTypeOid'], None)
                 if pfe_configuration:
                     temp_entity_table['entPhysicalModelName'] = str(pfe_configuration.pop('linecard_model', ''))
@@ -184,13 +183,13 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
         return result_dict
 
     def _get_module_info(self, description):
-        module_details_map = {'entPhysicalModelName': '', 'entPhysicalSoftwareRev': '', 'entPhysicalSerialNum': ''}
+        module_details_map = {'module_model': '', 'version': '', 'serial_number': ''}
         model_description = re.search(self.module_details_regexp, description, re.IGNORECASE)
         if model_description:
             result = model_description.groupdict()
-            module_details_map['entPhysicalModelName'] = result.get('module_model')
-            module_details_map['entPhysicalSoftwareRev'] = result.get('version')
-            module_details_map['entPhysicalSerialNum'] = result.get('serial_number')
+            module_details_map['module_model'] = result.get('module_model')
+            module_details_map['version'] = result.get('version')
+            module_details_map['serial_number'] = result.get('serial_number')
 
         return module_details_map
 
@@ -216,14 +215,14 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
             self.module_by_relative_path[module_id] = module
             module_index = self._get_resource_id(module)
             module_entity = self.entity_table.get(module, dict())
-            module_details_map = {'module_model': module_entity.get('entPhysicalModelName', ''),
-                                  'version': module_entity.get('entPhysicalSoftwareRev', ''),
-                                  'serial_number': module_entity.get('entPhysicalSerialNum', '')}
+            ericsson_model = module_entity.get('entPhysicalModelName', '')
+            module_details_map = self._get_module_info(module_entity['entPhysicalDescr'])
+            if ericsson_model:
+                module_details_map['ericsson_model'] = ericsson_model
+            module_name = "{0} card {1}".format(module_details_map.get('module_model', ''), module_index)
             if '/' in module_id and len(module_id.split('/')) < 3:
-                module_name = module_details_map.get('module_model', '')
                 model = 'Generic Module'
             else:
-                module_name = 'Sub Module {0}'.format(module_index)
                 model = 'Generic Sub Module'
             module_object = EricssonModule(name=module_name, model=model, relative_path=module_id, **module_details_map)
             self._add_resource(module_object)

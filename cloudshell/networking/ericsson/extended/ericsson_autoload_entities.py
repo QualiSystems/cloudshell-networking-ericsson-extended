@@ -36,9 +36,9 @@ class EricssonPort(GenericResource):
 
 
 class EricssonModuleAttributes(NetworkingStandardModuleAttributes):
-    def __init__(self, relative_path, serial_number='', module_model='', version=''):
+    def __init__(self, relative_path, serial_number='', ericsson_model='', module_model='', version=''):
         NetworkingStandardModuleAttributes.__init__(self, relative_path, serial_number, module_model, version)
-        self.ericsson_model = AutoLoadAttribute(relative_path, 'Ericsson Model', module_model)
+        self.ericsson_model = AutoLoadAttribute(relative_path, 'Ericsson Model', ericsson_model)
 
 
 class EricssonModule(GenericResource):
