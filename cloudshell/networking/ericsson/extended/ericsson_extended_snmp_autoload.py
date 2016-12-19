@@ -116,8 +116,8 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
                                      [index])
             temp_entity_table['entPhysicalVendorType'] = self.snmp.get_property('ENTITY-MIB', 'entPhysicalVendorType',
                                                                                 index)
-            vendor_type_oid = self.snmp.var_binds[0]._ObjectType__args[-1]._ObjectIdentity__mibNode.name
-            temp_entity_table['entPhysicalVendorTypeOid'] = '.'.join(map(str, vendor_type_oid))
+            vendor_type_oid_tuple = self.snmp.var_binds[0]._ObjectType__args[-1]._ObjectIdentity__mibNode.name
+
             if temp_entity_table['entPhysicalContainedIn'] == '':
                 self.exclusion_list.append(index)
                 continue
@@ -152,8 +152,13 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
                         self.port_mapping[index] = port_id
                     self.port_list.append(index)
             elif temp_entity_table['entPhysicalClass'] == 'module':
+                vendor_type_oid = '.'.join(map(str, vendor_type_oid_tuple))
+                if len(vendor_type_oid_tuple) < 11:
+                    if '.' in temp_entity_table['entPhysicalVendorType']:
+                        vendor_type_oid += '.{0}'.format(
+                            temp_entity_table['entPhysicalVendorType'].split('.')[-1])
                 self.module_list.append(index)
-                pfe_configuration = self.configuration.get(temp_entity_table['entPhysicalVendorTypeOid'], None)
+                pfe_configuration = self.configuration.get(vendor_type_oid, None)
                 if pfe_configuration:
                     temp_entity_table['entPhysicalModelName'] = str(pfe_configuration.pop('linecard_model', ''))
                     for pfe in pfe_configuration:
