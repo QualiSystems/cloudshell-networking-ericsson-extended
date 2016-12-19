@@ -153,7 +153,6 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
                     self.port_list.append(index)
             elif temp_entity_table['entPhysicalClass'] == 'module':
                 self.module_list.append(index)
-                self.pfe_dict[index] = {'pfe_0': dict()}
                 pfe_configuration = self.configuration.get(temp_entity_table['entPhysicalVendorTypeOid'], None)
                 if pfe_configuration:
                     temp_entity_table['entPhysicalModelName'] = str(pfe_configuration.pop('linecard_model', ''))
@@ -219,6 +218,8 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
             module_details_map = self._get_module_info(module_entity['entPhysicalDescr'])
             if ericsson_model:
                 module_details_map['ericsson_model'] = ericsson_model
+            else:
+                module_details_map['ericsson_model'] = re.sub('\s[Cc]ard.*$', '', module_details_map['module_model'])
             module_name = "{0} card {1}".format(module_details_map.get('module_model', ''), module_index)
             if '/' in module_id and len(module_id.split('/')) < 3:
                 model = 'Generic Module'
@@ -227,8 +228,8 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
             module_object = EricssonModule(name=module_name, model=model, relative_path=module_id, **module_details_map)
             self._add_resource(module_object)
             self.logger.info('Module {} added'.format(self.entity_table[module]['entPhysicalDescr']))
-            pfes = self.pfe_dict.get(module, list())
-            for pfe_key in pfes:
+            pfes = self.pfe_dict.get(module, dict())
+            for pfe_key in pfes.keys():
                 pfe_object = PFE(name=pfe_key.upper().replace('_', ''),
                                  relative_path="{0}/{1}".format(module_id, pfe_key.split('_')[-1]))
                 self._add_resource(pfe_object)
@@ -286,10 +287,6 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
                 attribute_map = {'l2_protocol_type': interface_type,
                                  'mac': if_table[self.port_mapping[port]]['ifPhysAddress'],
                                  'mtu': if_table[self.port_mapping[port]]['ifMtu'],
-                                 'supports_1ge': does_support_1ge,
-                                 'supports_10ge': does_support_10ge,
-                                 'supports_40ge': does_support_40ge,
-                                 'supports_100ge': does_support_100ge,
                                  'bandwidth': if_table[self.port_mapping[port]]['ifHighSpeed'],
                                  'description': self.snmp.get_property('IF-MIB', 'ifAlias', self.port_mapping[port]),
                                  'adjacent': self._get_adjacent(self.port_mapping[port])}
@@ -308,6 +305,10 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
                     attribute_map['l2_protocol_type'] = 'ethernet'
                 elif 'pos' in self.entity_table[port]['entPhysicalVendorType'].lower():
                     attribute_map['l2_protocol_type'] = 'pos'
+            attribute_map['supports_1ge'] = does_support_1ge
+            attribute_map['supports_10ge'] = does_support_10ge
+            attribute_map['supports_40ge'] = does_support_40ge
+            attribute_map['supports_100ge'] = does_support_100ge
 
             port_object = EricssonPort(name=interface_name.replace('/', '-').title(), relative_path=port_relative_path,
                                        **attribute_map)
