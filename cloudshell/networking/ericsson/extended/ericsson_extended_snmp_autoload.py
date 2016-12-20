@@ -1,5 +1,6 @@
 from collections import defaultdict
 import re
+from cloudshell.networking.autoload.networking_autoload_resource_structure import Chassis
 from cloudshell.networking.ericsson.autoload.ericsson_generic_snmp_autoload import EricssonGenericSNMPAutoload
 from cloudshell.networking.ericsson.extended.ericsson_autoload_entities import EricssonPort, PFE, EricssonModule
 from cloudshell.shell.core.driver_context import AutoLoadDetails
@@ -160,7 +161,7 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
                 self.module_list.append(index)
                 pfe_configuration = self.configuration.get(vendor_type_oid, None)
                 if pfe_configuration:
-                    temp_entity_table['entPhysicalModelName'] = str(pfe_configuration.pop('linecard_model', ''))
+                    temp_entity_table['entPhysicalModelName'] = str(pfe_configuration.get('linecard_model', ''))
                     for pfe in pfe_configuration:
                         if not isinstance(pfe_configuration[pfe], dict):
                             continue
@@ -172,11 +173,9 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
                             for value in port_range:
                                 if '-' in value:
                                     port_min, port_max = value.split('-')
-                                    values.remove(value)
                                     port_list.extend(map(str, range(int(port_min), int(port_max) + 1)))
                                 else:
                                     port_name = value.encode('ascii')
-                                    values.remove(value)
                                     port_list.append(port_name)
                             port_speed = key.encode('ascii')
                             self.pfe_dict[index][pfe][port_speed] = map(str, port_list)
@@ -260,6 +259,7 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
             if parent_entity_id:
                 pfe_config = self.pfe_dict.get(parent_entity_id, list())
                 for port_config in pfe_config:
+                    has_pfe_config = False
                     for key, values in pfe_config[port_config].iteritems():
                         if port_id in values:
                             if '1GE' in key:
@@ -270,7 +270,10 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
                                 does_support_40ge = True
                             if '100GE' in key:
                                 does_support_100ge = True
-                            parent_relative_path = parent_relative_path + '/' + port_config.replace('pfe_', '')
+                            has_pfe_config = True
+                    if has_pfe_config:
+                        parent_relative_path = parent_relative_path + '/' + port_config.replace('pfe_', '')
+
             port_relative_path = parent_relative_path + '/' + port_id
             attribute_map = {}
             interface_name = self.entity_table[port]['entPhysicalDescr'].lower()
@@ -320,3 +323,40 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
             self._add_resource(port_object)
             self.logger.info('Added ' + interface_name + ' Port')
         self.logger.info('Load port completed.')
+
+    def _get_chassis_attributes(self, chassis_list):
+        """Get Chassis element attributes
+
+        :param chassis_list: list of chassis to load attributes for
+        :return:
+        """
+
+        self.logger.info('Start loading Chassis')
+        for chassis in chassis_list:
+            chassis_id = self.relative_path[chassis]
+            model = self.entity_table[chassis]['entPhysicalDescr']
+            model_match = re.search(r'chassis.*', self.entity_table[chassis]['entPhysicalVendorType'], re.IGNORECASE)
+            if model_match:
+                model = model_match.group()
+
+            serial_number = ''
+            backplane_dict = self.entity_table.filter_by_column('Class', 'backplane').sort_by_column('ContainedIn')
+            for key, value in backplane_dict.iteritems():
+                if chassis == int(value['entPhysicalContainedIn']):
+                    serial_number_match = re.search('(?<=SN:)\s*\S+', self.entity_table[key]['entPhysicalDescr'],
+                                                    re.IGNORECASE)
+                    if serial_number_match:
+                        serial_number = serial_number_match.group()
+                        break
+
+            chassis_details_map = {
+                'chassis_model': model,
+                'serial_number': serial_number
+            }
+            if chassis_details_map['chassis_model'] == '':
+                chassis_details_map['chassis_model'] = self.entity_table[chassis]['entPhysicalDescr']
+            relative_path = '{0}'.format(chassis_id)
+            chassis_object = Chassis(relative_path=relative_path, **chassis_details_map)
+            self._add_resource(chassis_object)
+            self.logger.info('Added ' + self.entity_table[chassis]['entPhysicalDescr'] + ' Chass')
+        self.logger.info('Finished Loading Modules')
