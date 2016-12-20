@@ -355,6 +355,7 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
             }
             if chassis_details_map['chassis_model'] == '':
                 chassis_details_map['chassis_model'] = self.entity_table[chassis]['entPhysicalDescr']
+                
             relative_path = '{0}'.format(chassis_id)
             chassis_object = Chassis(relative_path=relative_path, **chassis_details_map)
             self._add_resource(chassis_object)
