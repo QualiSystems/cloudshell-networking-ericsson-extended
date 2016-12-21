@@ -162,6 +162,10 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
                 pfe_configuration = self.configuration.get(vendor_type_oid, None)
                 if pfe_configuration:
                     temp_entity_table['entPhysicalModelName'] = str(pfe_configuration.get('linecard_model', ''))
+                    ignore_module = (str(pfe_configuration.get('ignore_linecard', 'False')).lower() == 'true')
+                    if ignore_module:
+                        self.module_list.remove(index)
+                        continue
                     for pfe in pfe_configuration:
                         if not isinstance(pfe_configuration[pfe], dict):
                             continue
@@ -334,10 +338,7 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
         self.logger.info('Start loading Chassis')
         for chassis in chassis_list:
             chassis_id = self.relative_path[chassis]
-            model = self.entity_table[chassis]['entPhysicalDescr']
-            model_match = re.search(r'chassis.*', self.entity_table[chassis]['entPhysicalVendorType'], re.IGNORECASE)
-            if model_match:
-                model = model_match.group()
+            model = self._get_chassis_model(chassis)
 
             serial_number = ''
             backplane_dict = self.entity_table.filter_by_column('Class', 'backplane').sort_by_column('ContainedIn')
@@ -361,3 +362,10 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
             self._add_resource(chassis_object)
             self.logger.info('Added ' + self.entity_table[chassis]['entPhysicalDescr'] + ' Chass')
         self.logger.info('Finished Loading Modules')
+
+    def _get_chassis_model(self, chassis_id):
+        model = self.entity_table[chassis_id]['entPhysicalDescr']
+        model_match = re.search(r'chassis.*', self.entity_table[chassis_id]['entPhysicalVendorType'], re.IGNORECASE)
+        if model_match:
+            model = model_match.group()
+        return model
