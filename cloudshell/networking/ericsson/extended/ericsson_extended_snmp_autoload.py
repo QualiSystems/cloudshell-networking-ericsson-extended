@@ -42,6 +42,8 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
         self.vendor_type_exclusion_pattern = ''
         self.module_details_regexp = r'^(?P<module_model>.*)\s+[Cc]ard\s+sn:(?P<serial_number>.*)\s+rev:(?P<version>.*) mfg'
         self.load_mib_list = []
+        self.configuration_file_path = ''
+        self.missing_modules_oids = {}
         self.resources = list()
         self.attributes = list()
 
@@ -91,6 +93,9 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
                                                           attribute.attribute_value))
         self.logger.info('*******************************************')
 
+        self.logger.info('The following linecards do not exist in the configuration json:')
+        self.logger.info(self.missing_modules_oids)
+        self.logger.info("JSON Configuration file can be found: {0}".format(self.configuration_file_path))
         return result
 
     def _get_entity_table(self):
@@ -183,6 +188,8 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
                                     port_list.append(port_name)
                             port_speed = key.encode('ascii')
                             self.pfe_dict[index][pfe][port_speed] = map(str, port_list)
+                else:
+                    self.missing_modules_oids[vendor_type_oid] = temp_entity_table['entPhysicalDescr']
             elif temp_entity_table['entPhysicalClass'] == 'powerSupply':
                 self.power_supply_list.append(index)
 
@@ -228,7 +235,7 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
                 module_details_map['ericsson_model'] = ericsson_model
             else:
                 module_details_map['ericsson_model'] = re.sub('\s[Cc]ard.*$', '', module_details_map['module_model'])
-            module_name = "{0} card {1}".format(module_details_map.get('module_model', ''), module_index)
+            module_name = "Card {0} - {1}".format(module_index, module_details_map.get('module_model', ''))
             if '/' in module_id and len(module_id.split('/')) < 3:
                 model = 'Generic Module'
             else:
