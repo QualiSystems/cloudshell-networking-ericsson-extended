@@ -233,6 +233,7 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
             module_details_map = self._get_module_info(module_entity['entPhysicalDescr'])
             if ericsson_model:
                 module_details_map['ericsson_model'] = ericsson_model
+                module_details_map['module_model'] = ericsson_model
             else:
                 module_details_map['ericsson_model'] = re.sub('\s[Cc]ard.*$', '', module_details_map['module_model'])
             module_name = "Card {0} - {1}".format(module_index, module_details_map.get('module_model', ''))
