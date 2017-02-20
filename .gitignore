@@ -51,6 +51,17 @@ coverage.xml
 
 # Django stuff:
 *.log
+<<<<<<< HEAD
+=======
+local_settings.py
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+>>>>>>> 32bc33e6be1baed6445addead9987cb7e09065ab
 
 # Sphinx documentation
 docs/_build/

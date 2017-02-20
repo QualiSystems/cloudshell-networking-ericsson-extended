@@ -1,2 +1,2 @@
-# cloudshell-networking-ericsson
-![alt tag](https://travis-ci.org/QualiSystems/cloudshell-networking-ericsson.svg)
+# cloudshell-networking-ericsson-extended
+cloudshell-networking-ericsson-extended
