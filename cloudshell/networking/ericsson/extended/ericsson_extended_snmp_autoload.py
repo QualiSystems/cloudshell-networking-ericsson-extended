@@ -117,9 +117,14 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
             if physical_indexes[index]['entPhysicalParentRelPos'] == '':
                 self.exclusion_list.append(index)
                 continue
+
             temp_entity_table = physical_indexes[index].copy()
             temp_entity_table.update(self.snmp.get_properties('ENTITY-MIB', index, entity_table_critical_port_attr)
                                      [index])
+            contained_in = temp_entity_table.get("entPhysicalContainedIn")
+            if contained_in and int(contained_in) in self.exclusion_list:
+                self.exclusion_list.append(index)
+                continue
             temp_entity_table['entPhysicalVendorType'] = self.snmp.get_property('ENTITY-MIB', 'entPhysicalVendorType',
                                                                                 index)
             vendor_type_oid_tuple = self.snmp.var_binds[0]._ObjectType__args[-1]._ObjectIdentity__mibNode.name
@@ -144,6 +149,9 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
             if re.search(r'stack|chassis|module|port|powerSupply|container|backplane',
                          temp_entity_table['entPhysicalClass']):
                 result_dict[index] = temp_entity_table
+            else:
+                self.exclusion_list.append(index)
+                continue
 
             if temp_entity_table['entPhysicalClass'] == 'chassis':
                 self.chassis_list.append(index)
