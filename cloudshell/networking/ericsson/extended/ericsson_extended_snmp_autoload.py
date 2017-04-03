@@ -31,6 +31,7 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
         self.supported_os = supported_os
         self.port_list = []
         self.power_supply_list = []
+        self._containers_to_modules_pattern = ""
         self.relative_path = {}
         self.port_mapping = {}
         self.module_by_relative_path = {}
@@ -40,7 +41,8 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
         self.port_exclude_pattern = r'serial|stack|engine|management|mgmt|voice|foreign'
         self.port_ethernet_vendor_type_pattern = ''
         self.vendor_type_exclusion_pattern = ''
-        self.module_details_regexp = r'^(?P<module_model>.*)\s+[Cc]ard\s+sn:(?P<serial_number>.*)\s+rev:(?P<version>.*) mfg'
+        self.module_details_regexp = \
+            r'^(?P<module_model>.*)\s+[Cc]ard\s+sn:(?P<serial_number>.*)\s+rev:(?P<version>.*) mfg'
         self.load_mib_list = []
         self.configuration_file_path = ''
         self.missing_modules_oids = {}
@@ -71,6 +73,7 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
                 if chassis_id == '-1':
                     chassis_id = '0'
                 self.relative_path[chassis] = chassis_id
+        self._add_relative_addresses()
         self._get_chassis_attributes(self.chassis_list)
         self._get_module_attributes()
         self._get_ports_attributes()
@@ -127,6 +130,12 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
                 continue
             temp_entity_table['entPhysicalVendorType'] = self.snmp.get_property('ENTITY-MIB', 'entPhysicalVendorType',
                                                                                 index)
+            if self._containers_to_modules_pattern \
+                    and "container" in temp_entity_table['entPhysicalClass'] \
+                    and re.search(self._containers_to_modules_pattern,
+                                  temp_entity_table['entPhysicalVendorType'], re.IGNORECASE):
+                temp_entity_table['entPhysicalClass'] = "module"
+
             vendor_type_oid_tuple = self.snmp.var_binds[0]._ObjectType__args[-1]._ObjectIdentity__mibNode.name
 
             if temp_entity_table['entPhysicalContainedIn'] == '':
@@ -232,7 +241,7 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
 
         self.logger.info('Start loading Modules')
         for module in self.module_list:
-            module_id = self.get_relative_path(module) + '/' + self._get_resource_id(module)
+            module_id = self.relative_path.get(module, "")  # + '/' + self._get_resource_id(module)
             self.relative_path[module] = module_id
             self.module_by_relative_path[module_id] = module
             module_index = self._get_resource_id(module)
@@ -274,8 +283,9 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
             does_support_40ge = False
             does_support_100ge = False
             port_id = self._get_resource_id(port)
-            parent_relative_path = self.get_relative_path(port)
+            parent_relative_path = self.get_relative_address(port)
             parent_entity_id = self.module_by_relative_path.get(parent_relative_path, '')
+            port_relative_path = self.relative_path.get(port, "")
             if parent_entity_id:
                 pfe_config = self.pfe_dict.get(parent_entity_id, list())
                 for port_config in pfe_config:
@@ -292,9 +302,9 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
                                 does_support_100ge = True
                             has_pfe_config = True
                     if has_pfe_config:
-                        parent_relative_path = parent_relative_path + '/' + port_config.replace('pfe_', '')
+                        port_relative_path = "{0}/{1}/{2}".format(parent_relative_path,
+                                                                  port_config.replace('pfe_', ''), port_id)
 
-            port_relative_path = parent_relative_path + '/' + port_id
             attribute_map = {}
             interface_name = self.entity_table[port]['entPhysicalDescr'].lower()
             if self.port_ethernet_vendor_type_pattern != '' and re.search(self.port_ethernet_vendor_type_pattern,
