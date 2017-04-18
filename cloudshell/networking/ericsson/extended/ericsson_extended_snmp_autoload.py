@@ -168,7 +168,12 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
                 if not re.search(self.port_exclude_pattern, temp_entity_table['entPhysicalName'], re.IGNORECASE) \
                         and not re.search(self.port_exclude_pattern, temp_entity_table['entPhysicalDescr'],
                                           re.IGNORECASE):
-                    port_id = self._get_mapping(index, temp_entity_table[self.ENTITY_PHYSICAL])
+                    interface_name_match = re.search(r".*(\d+/)?\d+\s", temp_entity_table[self.ENTITY_PHYSICAL])
+                    if interface_name_match:
+                        interface_name = interface_name_match.group().strip(' ')
+                    else:
+                        interface_name = temp_entity_table[self.ENTITY_PHYSICAL]
+                    port_id = self._get_mapping(index, interface_name)
                     if port_id and port_id in self.if_table and port_id not in self.port_mapping.values() \
                             and not re.search(self.port_exclude_pattern,
                                               self.if_table[port_id][self.IF_ENTITY], re.IGNORECASE):
@@ -218,7 +223,7 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
         model_description = re.search(self.module_details_regexp, description, re.IGNORECASE)
         if model_description:
             result = model_description.groupdict()
-            module_details_map['module_model'] = result.get('module_model')
+            module_details_map['module_model'] = result.get('module_model').lower()
             module_details_map['version'] = result.get('version')
             module_details_map['serial_number'] = result.get('serial_number')
 
@@ -249,8 +254,8 @@ class EricssonExtendedSNMPAutoload(EricssonGenericSNMPAutoload):
             ericsson_model = module_entity.get('entPhysicalModelName', '')
             module_details_map = self._get_module_info(module_entity['entPhysicalDescr'])
             if ericsson_model:
-                module_details_map['ericsson_model'] = ericsson_model
-                module_details_map['module_model'] = ericsson_model
+                module_details_map['ericsson_model'] = ericsson_model.lower()
+                module_details_map['module_model'] = ericsson_model.lower()
             else:
                 module_details_map['ericsson_model'] = re.sub('\s[Cc]ard.*$', '', module_details_map['module_model'])
             module_name = "Card {0} - {1}".format(module_index, module_details_map.get('module_model', ''))
